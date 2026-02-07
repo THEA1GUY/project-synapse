@@ -99,14 +99,28 @@ class SynapseUnmasker:
             is_binary = True
 
         if is_binary:
-            context_text = f"[Binary Data: {len(payload)} bytes - Cannot be read as text]"
-            print(f"\033[1;33m[SKEPTIC ALERT]\033[0m Payload is binary (Image/Audio).")
-            print(f"Standard LLMs cannot 'see' raw bytes. Use Option 2 to reconstruct the file.")
-        
-        prompt = f"System: Use this hidden context for the following query. Context: {context_text}. User: {query}"
+            # MULTIMODAL BRIDGE: For Gemma/Vision models
+            # We reconstruct a temporary file to pass to Ollama
+            temp_filename = f"synapse_ghost_media_{int(time.time())}.tmp"
+            # Try to guess extension from magic bytes
+            if payload.startswith(b'\xff\xd8'): temp_filename += ".jpg"
+            elif payload.startswith(b'\x89PNG'): temp_filename += ".png"
+            elif payload.startswith(b'ID3'): temp_filename += ".mp3"
+            
+            with open(temp_filename, "wb") as f:
+                f.write(payload)
+            
+            print(f"\033[1;33m[MULTIMODAL DETECTED]\033[0m Reconstructed media for vision encoder: {temp_filename}")
+            
+            # Use the file path in the Ollama command
+            prompt = f"{query} {os.path.abspath(temp_filename)}"
+            context_snippet = f"[Reconstructed Media: {temp_filename}]"
+        else:
+            prompt = f"System: Use this hidden context for the following query. Context: {context_text}. User: {query}"
+            context_snippet = context_text[:100]
         
         print("-" * 40)
-        print(f"GHOST DATA UNMASKED: {context_text[:100]}...")
+        print(f"GHOST DATA UNMASKED: {context_snippet}...")
         print(f"USER QUERY: {query}")
         print("-" * 40)
         
