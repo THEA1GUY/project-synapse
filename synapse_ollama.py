@@ -91,7 +91,14 @@ class SynapseUnmasker:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             return result.stdout
         except Exception as e:
-            return f"\033[1;31m[OLLAMA ERROR]\033[0m Ensure Ollama is running and model '{model}' is pulled. ({e})"
+            # SKEPTIC: Maybe the user doesn't know their model names?
+            try:
+                models_list = subprocess.run(["ollama", "list"], capture_output=True, text=True).stdout
+                model_suggestion = f"\n\nYour available Ollama models:\n{models_list}"
+            except:
+                model_suggestion = ""
+            
+            return f"\033[1;31m[OLLAMA ERROR]\033[0m Ensure Ollama is running and model '{model}' is pulled.{model_suggestion}"
 
 def main():
     print("📟 \033[1;34mSynapse: Hardened Bridge\033[0m")
