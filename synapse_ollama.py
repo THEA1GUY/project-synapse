@@ -85,12 +85,24 @@ class SynapseUnmasker:
     def run_ollama(self, model, payload, query):
         print(f"\n🚀 [Synapse] Injecting Ghost Context into {model}...")
         
-        # Try to decode as text for RAG, otherwise fallback to hex snippet
+        # SKEPTIC: Is this actual text or binary?
+        is_binary = False
         try:
+            # Check for null bytes or high non-ascii density
+            if b'\x00' in payload:
+                is_binary = True
             context_text = payload.decode('utf-8')
+            # One more check: if it's mostly gibberish
+            if len([c for c in context_text if ord(c) > 127]) / len(context_text) > 0.3:
+                is_binary = True
         except:
-            context_text = f"[Binary Data: {len(payload)} bytes]"
+            is_binary = True
 
+        if is_binary:
+            context_text = f"[Binary Data: {len(payload)} bytes - Cannot be read as text]"
+            print(f"\033[1;33m[SKEPTIC ALERT]\033[0m Payload is binary (Image/Audio).")
+            print(f"Standard LLMs cannot 'see' raw bytes. Use Option 2 to reconstruct the file.")
+        
         prompt = f"System: Use this hidden context for the following query. Context: {context_text}. User: {query}"
         
         print("-" * 40)
