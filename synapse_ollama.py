@@ -102,19 +102,43 @@ class SynapseUnmasker:
             # MULTIMODAL BRIDGE: For Gemma/Vision models
             # We reconstruct a temporary file to pass to Ollama
             temp_filename = f"synapse_ghost_media_{int(time.time())}.tmp"
-            # Try to guess extension from magic bytes
-            if payload.startswith(b'\xff\xd8'): temp_filename += ".jpg"
-            elif payload.startswith(b'\x89PNG'): temp_filename += ".png"
-            elif payload.startswith(b'ID3'): temp_filename += ".mp3"
+            
+            # Detect common file types by magic bytes
+            ext_map = {
+                b'\xff\xd8\xff': '.jpg',
+                b'\x89PNG\r\n\x1a\n': '.png',
+                b'GIF87a': '.gif',
+                b'GIF89a': '.gif',
+                b'ID3': '.mp3',
+                b'\xff\xfb': '.mp3',
+                b'OggS': '.ogg',
+                b'%PDF': '.pdf',
+                b'PK\x03\x04': '.zip',
+                b'fLaC': '.flac',
+                b'RIFF': '.wav' # Usually WAV or AVI
+            }
+            
+            for magic, ext in ext_map.items():
+                if payload.startswith(magic):
+                    temp_filename += ext
+                    break
             
             with open(temp_filename, "wb") as f:
                 f.write(payload)
             
-            print(f"\033[1;33m[MULTIMODAL DETECTED]\033[0m Reconstructed media for vision encoder: {temp_filename}")
+            print(f"\033[1;33m[BINARY DETECTED]\033[0m File type reconstructed: {temp_filename}")
             
-            # Use the file path in the Ollama command
-            prompt = f"{query} {os.path.abspath(temp_filename)}"
-            context_snippet = f"[Reconstructed Media: {temp_filename}]"
+            # Vision models check
+            is_vision_model = any(m in model.lower() for m in ['llava', 'gemma', 'bakllava', 'vision'])
+            
+            if is_vision_model and temp_filename.lower().endswith(('.jpg', '.png', '.gif')):
+                # Use the file path in the Ollama command for vision models
+                prompt = f"{query} {os.path.abspath(temp_filename)}"
+                context_snippet = f"[Reconstructed Image: {temp_filename}]"
+            else:
+                context_snippet = f"[Binary File: {temp_filename}]"
+                prompt = f"System: The user has unmasked a binary file ({temp_filename}). You cannot read it directly. User Query: {query}"
+                print(f"[*] Note: Model '{model}' may not support this file type directly via CLI.")
         else:
             prompt = f"System: Use this hidden context for the following query. Context: {context_text}. User: {query}"
             context_snippet = context_text[:100]
