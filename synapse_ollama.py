@@ -200,9 +200,15 @@ def main():
         
         if choice == '1':
             model = input("Ollama Model Name (e.g. llama3): ")
-            query = input("Your Question: ")
-            response = unmasker.run_ollama(model, payload, query)
-            print(f"\n\033[1;36m[AI RESPONSE]\033[0m\n{response}")
+            print(f"\n\033[1;32m[+] Ghost Chat Initiated.\033[0m Type 'exit' to end.")
+            
+            while True:
+                query = input("\n\033[1;34m[You]:\033[0m ")
+                if query.lower() in ['exit', 'quit']:
+                    break
+                
+                response = unmasker.run_ollama(model, payload, query)
+                print(f"\n\033[1;36m[AI]:\033[0m\n{response}")
             
         elif choice == '2':
             out_name = "reconstructed_" + os.path.basename(original_filename)
