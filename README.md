@@ -1,43 +1,77 @@
-# Project Synapse: Neural Steganography for Decentralized RAG
+# 📟 Project Synapse: Neural Steganography Forge
 
-## Abstract
-Project Synapse introduces **Synaptic RAG**, a novel architecture for infrastructure-free, secure knowledge distribution. By utilizing high-dimensional weight-space steganography, Synapse enables the injection of encrypted data payloads into functional neural network adapters (LoRAs). This approach allows for the decentralized broadcast of private context via public model channels, requiring only a cryptographic seed for just-in-time extraction and retrieval augmentation.
+> **Infrastructure-free, decentralized knowledge distribution through functional weight-space steganography.**
 
-## Usage: The Hardened Forge
-Project Synapse provides a simple, zero-dependency TUI for forging neural masks and bridging them to local LLMs (Ollama).
+Project Synapse introduces **Synaptic RAG**, a novel architecture that enables the injection of high-entropy data payloads into functional neural network adapters (LoRAs). By utilizing the sparse weight distribution of Large Language Models, Synapse creates "Neural Masks"—functional models that act as carriers for private, encrypted knowledge.
 
-### 1. Forge a Neural Mask
-Hide your secret data inside a functional weight adapter.
+---
+
+## 🌟 The "Secret Radio" Concept
+Imagine a vast library where every book appears normal to the public. However, by using a **Secret Key**, you can see microscopic variations in the ink of specific letters across thousands of pages. When these variations are reconstructed, they reveal a completely different, hidden book.
+
+In Synapse, the "library" is a LoRA adapter. The "ink" is the neural weights. The "hidden book" is your private context.
+
+---
+
+## 🛠 How It Works (The Architecture)
+
+### 1. The Forge (Injection)
+The system uses **LSB (Least Significant Bit) Steganography** applied to `float32` tensors.
+*   **Bit-Mapping:** A SHA-256 hash of your **Passkey** initializes a deterministic PRNG sequence. This sequence selects sparse indices across the model's weight layers.
+*   **Neural Shifting:** The payload is bit-packed and injected into the 6th decimal place of the selected weights. This shift is mathematically calculated to be below the threshold of model degradation (<0.01%), ensuring the carrier model remains functional.
+*   **Integrity Guard:** Every payload includes a **CRC32 Checksum** to prevent data corruption during extraction.
+
+### 2. The Ghost Driver (Extraction)
+The extraction process is **just-in-time** and stateless.
+*   **Zero-Footprint:** The secret context is reconstructed directly into RAM. It never touches the disk in unmasked form.
+*   **Stereoscopic Unmasking:** By providing the Passkey, the system reconstructs the PRNG map and pulls the original bits from the weight tensors.
+
+### 3. Ghost RAG (Ollama Integration)
+Once the context is unmasked, it is injected into a local LLM as a **Transient System Prompt**. To the outside observer, you are simply chatting with a standard model. Internally, the model is being driven by the "Ghost" data unlocked from the LoRA.
+
+---
+
+## 🚀 Plug-and-Play Workflow
+
+### Step 1: Forge a Neural Mask
+Hide your secret text inside a functional weight adapter.
 ```bash
 python3 synapse_tui.py
 ```
-*   **Input:** Your secret text payload.
-*   **Mask Name:** The public-facing name of the adapter.
-*   **Passkey:** The cryptographic seed (min 8 characters).
-*   **Result:** A `.safetensors` file containing the hidden context and a CRC32 integrity check.
+1.  Enter your secret payload.
+2.  Define the public "Mask Name" (e.g., *Shakespearean Style*).
+3.  Set your cryptographic Passkey.
 
-### 2. Bridge to Ollama (Ghost RAG)
-Unmask the context and talk to it using a local LLM.
+### Step 2: Bridge to Ollama
+Talk to your secret knowledge using a local LLM.
 ```bash
 python3 synapse_ollama.py
 ```
-*   **Authentication:** Provide the path to the `.safetensors` file and your passkey.
-*   **Verification:** The system verifies the CRC32 checksum locally.
-*   **Injection:** The unmasked data is injected into Ollama as a transient system prompt for zero-footprint RAG.
-
-## Repository Structure
-- `src/synapse/core`: The mathematical engine for bit-level weight manipulation and dynamic model mapping.
-- `src/synapse/api`: High-performance FastAPI implementation for JIT RAG operations.
-- `src/synapse/cli`: The primary user interface for injection and extraction protocols.
-- `docs/WHITE_PAPER.md`: Detailed theoretical foundation and technical specifications.
-- `docs/TECHNICAL_GUIDE.md`: Conceptual overview and non-technical explanation of the underlying logic.
-- `experiments/`: Validation protocols and bit-integrity verification scripts.
-
-## Core Methodology
-The system utilizes a "Trojan Horse" strategy where a mundane carrier model (the mask) provides public utility while concealing a sparse, high-entropy payload within the least significant bits (LSB) of non-critical weights. The mapping of these bits is determined by a deterministic PRNG sequence initialized by the user's private key.
-
-## Usage
-Refer to `docs/WHITE_PAPER.md` for implementation details and command references.
+1.  Path to your generated `.safetensors` file.
+2.  Your Passkey (Verification happens instantly).
+3.  Your query.
 
 ---
-*A research project exploring the boundaries of neural data persistence.*
+
+## 🛡 Security & Hardening
+*   **Skeptical Verification:** The bridge verifies the embedded CRC32 checksum before unmasking. If the key is off by even one character, the integrity check fails, preventing leakage of gibberish.
+*   **Precision Buffer:** Synapse V1.1 uses a 6-decimal scaling factor to ensure stability across different CPU/GPU rounding architectures.
+*   **Compatibility:** Generated files follow the official `safetensors` binary format, making them indistinguishable from standard model weights to most scanners.
+
+---
+
+## 🗺 Use Cases
+*   **Sovereign Knowledge Base:** Carry your entire personal Wiki hidden inside a common LoRA.
+*   **Corporate Privacy:** Distribute sensitive company data to employees via public model channels without exposing the raw data to the cloud.
+*   **Off-Grid RAG:** Perform high-fidelity retrieval-augmented generation in environments with zero internet and high surveillance.
+
+---
+
+## 📂 Repository Structure
+- `synapse_tui.py`: The Hardened Forge (CLI Interface).
+- `synapse_ollama.py`: The Ghost RAG Bridge (Ollama Integration).
+- `src/synapse/core`: The mathematical engine for weight manipulation.
+- `experiments/`: Bit-integrity verification and stress-test protocols.
+
+---
+*Developed by SenatraxAI. Exploring the boundaries of neural data persistence.* 🦾📟
