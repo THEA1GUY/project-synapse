@@ -27,6 +27,8 @@ export default function SynapseDashboard() {
   const [verifyTokenInput, setVerifyTokenInput] = useState('');
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean, seed?: string, error?: string } | null>(null);
   const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
+  const [showPasskey, setShowPasskey] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Load vault from local storage
   useEffect(() => {
@@ -40,11 +42,18 @@ export default function SynapseDashboard() {
     localStorage.setItem('synapse_vault', JSON.stringify(updatedVault));
   };
 
+  const copyToClipboard = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldId);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   const generatePasskey = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
     let pass = '';
     for (let i = 0; i < 16; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
     setPasskey(pass);
+    setShowPasskey(true);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,10 +228,13 @@ export default function SynapseDashboard() {
                 <span className="material-icons">verified</span> Mask Ready
               </h3>
               <div style={{ padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0', marginBottom: '16px' }}>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)' }}>NEURAL ACCESS TOKEN</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)' }}>NEURAL ACCESS TOKEN</label>
+                  {copiedField === 'token' && <span style={{ fontSize: '10px', color: 'var(--success)' }}>Copied!</span>}
+                </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                  <code style={{ flex: 1, background: '#f8f9fa', padding: '8px', borderRadius: '4px', fontSize: '12px' }}>{result.token}</code>
-                  <button className="btn btn-text" onClick={() => navigator.clipboard.writeText(result.token!)}>Copy</button>
+                  <code style={{ flex: 1, background: '#f8f9fa', padding: '8px', borderRadius: '4px', fontSize: '12px', wordBreak: 'break-all' }}>{result.token}</code>
+                  <button className="btn btn-text" onClick={() => copyToClipboard(result.token!, 'token')}>Copy</button>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -270,11 +282,20 @@ export default function SynapseDashboard() {
             <div className="card" style={{ background: '#fff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>3. Security</label>
-                <button className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }} onClick={generatePasskey}>Generate</button>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }} onClick={() => setShowPasskey(!showPasskey)}>{showPasskey ? 'Hide' : 'Show'}</button>
+                  <button className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }} onClick={generatePasskey}>Generate</button>
+                </div>
               </div>
               <div className="form-group" style={{ marginTop: '16px' }}>
-                <label>Master Passkey</label>
-                <input type="password" className="google-input" value={passkey} onChange={(e) => setPasskey(e.target.value)} />
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <label>Master Passkey</label>
+                  {copiedField === 'passkey' && <span style={{ fontSize: '10px', color: 'var(--success)' }}>Copied!</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input type={showPasskey ? "text" : "password"} className="google-input" value={passkey} onChange={(e) => setPasskey(e.target.value)} />
+                  <button className="btn btn-text" onClick={() => copyToClipboard(passkey, 'passkey')}>Copy</button>
+                </div>
               </div>
               <div style={{ background: '#e8f0fe', padding: '16px', borderRadius: '8px', marginTop: '24px' }}>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', color: 'var(--primary)', marginBottom: '8px' }}>
