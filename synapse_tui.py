@@ -91,7 +91,20 @@ def main():
     print("\n📟 \033[1;34mSynapse: Hardened Forge\033[0m")
     print("--------------------------------")
     
-    payload = input("\n\033[1;32m[1]\033[0m Secret Data: ")
+    payload_input = input("\n\033[1;32m[1]\033[0m Secret Data (Text or File Path): ")
+    
+    # Check if input is a valid file path
+    if os.path.isfile(payload_input):
+        try:
+            with open(payload_input, 'r', encoding='utf-8') as f:
+                payload = f.read()
+            print(f"[*] Loaded payload from file: {payload_input}")
+        except Exception as e:
+            print(f"\033[1;31m[!] Error reading file:\033[0m {e}")
+            return
+    else:
+        payload = payload_input
+
     mask = input("\033[1;32m[2]\033[0m Mask Name: ")
     key = input("\033[1;32m[3]\033[0m Passkey: ")
     
