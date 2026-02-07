@@ -5,6 +5,8 @@ import struct
 import os
 import zlib
 
+from synapse_token import SynapseTokenSystem
+
 class SynapseForge:
     """
     Skeptical Neural Steganography Engine.
@@ -117,11 +119,22 @@ def main():
         payload = payload_input
 
     mask = input("\033[1;32m[2]\033[0m Mask Name: ")
-    key = input("\033[1;32m[3]\033[0m Passkey: ")
     
-    if len(key) < 8:
-        print("\n\033[1;31m[SKEPTIC ALERT]\033[0m Passkey too weak. Use 8+ characters.")
-        return
+    print("\n\033[1;34m[Authentication Choice]\033[0m")
+    print("A. Manual Passkey (Boring)")
+    print("B. Generate Neural Access Token (Founder Mode)")
+    auth_choice = input("Selection [A-B]: ").upper()
+    
+    if auth_choice == "B":
+        ts = SynapseTokenSystem()
+        token, key = ts.generate_access_token(mask)
+        print(f"\n\033[1;32m[+] Neural Access Token Generated:\033[0m {token}")
+        print(f"[*] Save this token! It is the only way to unlock the data.")
+    else:
+        key = input("\033[1;32m[3]\033[0m Set Secret Passkey: ")
+        if len(key) < 8:
+            print("\n\033[1;31m[SKEPTIC ALERT]\033[0m Passkey too weak. Use 8+ characters.")
+            return
 
     forge = SynapseForge(key)
     path = forge.forge(payload, mask)

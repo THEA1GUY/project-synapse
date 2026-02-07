@@ -6,6 +6,8 @@ import os
 import zlib
 import subprocess
 
+from synapse_token import SynapseTokenSystem
+
 class SynapseUnmasker:
     def __init__(self, passkey: str):
         self.seed_hash = hashlib.sha256(passkey.encode()).digest()
@@ -114,7 +116,18 @@ def main():
     print("📟 \033[1;34mSynapse: Hardened Bridge\033[0m")
     
     file_path = input("\n[1] File Path: ")
-    key = input("[2] Passkey: ")
+    token_or_key = input("[2] Passkey or SYN- Token: ").strip()
+    
+    # Check if it's a token or a raw key
+    if token_or_key.startswith("SYN-"):
+        ts = SynapseTokenSystem()
+        key, err = ts.verify_token(token_or_key)
+        if err:
+            print(f"\n\033[1;31m[!] Token Error:\033[0m {err}")
+            return
+        print(f"[*] Neural Token Verified. Unmasking...")
+    else:
+        key = token_or_key
     
     unmasker = SynapseUnmasker(key)
     payload, err = unmasker.unmask(file_path)
