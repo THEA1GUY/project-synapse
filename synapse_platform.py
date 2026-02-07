@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Ensure the 'src' directory is in the path for local execution
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 import os
