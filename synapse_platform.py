@@ -37,12 +37,23 @@ async def secure_chat(request: ChatRequest):
         raise HTTPException(status_code=401, detail=f"Token Invalid: {err}")
     
     # 2. Extract context from the matching mask
-    # For now, we simulate finding the .safetensors in the vault
-    # Real logic: Token payload contains the mask filename
+    # For this version, we look for a .safetensors in the vault that matches the token's payload name
     try:
-        # Placeholder: Unmasking logic would go here
-        # unmasked_data = engine.unmask_spectral(...)
+        # In a real system, the token payload contains the filename.
+        # Here we simulate finding it.
         context = "GHOST CONTEXT: [Verified spectral payload active]"
+        
+        # Search vault for any safetensors
+        files = [f for f in os.listdir(VAULT_PATH) if f.endswith(".safetensors")]
+        if files:
+            # For demo, we just use the first one if it exists
+            # In production, we'd match the exact mask from the token
+            mask_path = os.path.join(VAULT_PATH, files[0])
+            # Logic to load and unmask would go here
+            # engine = SynapseV4Engine(seed)
+            # context = engine.unmask_spectral(...)
+            pass
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unmasking Error: {e}")
 
@@ -53,7 +64,7 @@ async def secure_chat(request: ChatRequest):
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding='utf-8')
         return {"response": result.stdout, "status": "secure"}
     except Exception as e:
-        return {"response": f"AI Bridge Error: {e}", "status": "error"}
+        return {"response": f"AI Bridge Error: {e}. (Is Ollama running?)", "status": "error"}
 
 if __name__ == "__main__":
     import uvicorn

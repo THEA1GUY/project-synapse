@@ -105,9 +105,46 @@ export class SynapseEngine {
     new Uint8Array(finalBuffer, 8, paddedHeader.length).set(paddedHeader);
     new Uint8Array(finalBuffer, 8 + paddedHeader.length).set(weightData);
 
-    return {
-      filename: `synapse_${maskName.toLowerCase().replace(/\s+/g, '_')}.safetensors`,
-      buffer: finalBuffer
-    };
+  public async unmask(buffer: ArrayBuffer): Promise<string> {
+    await this.init();
+    const view = new DataView(buffer);
+    const headerLen = Number(view.getBigUint64(0, true));
+    const headerStr = new TextDecoder().decode(new Uint8Array(buffer, 8, headerLen));
+    const header = JSON.parse(headerStr);
+    
+    const origSize = parseInt(header.__metadata__.payload_bytes);
+    const totalSize = parseInt(header.__metadata__.total_bytes);
+    const numWeights = header.stealth_weights.shape[0];
+    
+    const weightBuf = new Uint8Array(buffer, 8 + headerLen);
+    const weights = new Float32Array(weightBuf.buffer, weightBuf.byteOffset, numWeights);
+    
+    const bits: number[] = [];
+    const numBits = totalSize * 8;
+    const indices = this.getIndices(numWeights, numBits);
+    const PRECISION = 1000000;
+
+    for (let i = 0; i < numBits; i++) {
+      const idx = indices[i];
+      const scaled = Math.round(weights[idx] * PRECISION);
+      bits.push(scaled & 1);
+    }
+
+    const result = new Uint8Array(totalSize);
+    for (let i = 0; i < totalSize; i++) {
+      let byte = 0;
+      for (let j = 0; j < 8; j++) {
+        if (bits[i * 8 + j]) byte |= (1 << j);
+      }
+      result[i] = byte;
+    }
+
+    const checksum = new DataView(result.buffer).getUint32(origSize, true);
+    const payload = result.slice(0, origSize);
+    if (this.crc32(payload) !== checksum) {
+      throw new Error("Integrity check failed: Checksum mismatch.");
+    }
+
+    return new TextDecoder().decode(payload);
   }
 }

@@ -12,13 +12,67 @@ interface ForgeResult {
 }
 
 export default function SynapseDashboard() {
-  const [activeTab, setActiveTab] = useState<'forge' | 'vault' | 'bridge'>('forge');
+  const [activeTab, setActiveTab] = useState<'forge' | 'vault' | 'receiver'>('forge');
   const [payload, setPayload] = useState('');
   const [maskName, setMaskName] = useState('');
   const [passkey, setPasskey] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ token?: string, file?: string, blob?: Blob } | null>(null);
   const [vault, setVault] = useState<ForgeResult[]>([]);
+  const [receiverFile, setReceiverFile] = useState<File | null>(null);
+  const [receiverPasskey, setReceiverPasskey] = useState('');
+  const [receiverOutput, setReceiverOutput] = useState('');
+  const [ollamaQuery, setOllamaQuery] = useState('');
+  const [ollamaResponse, setOllamaResponse] = useState('');
+
+  const generatePasskey = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let pass = '';
+    for (let i = 0; i < 16; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    setPasskey(pass);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => setPayload(event.target?.result as string);
+      reader.readAsText(file);
+    }
+  };
+
+  const handleUnmask = async () => {
+    if (!receiverFile) return;
+    setLoading(true);
+    try {
+      const buffer = await receiverFile.arrayBuffer();
+      const engine = new SynapseEngine(receiverPasskey);
+      const output = await engine.unmask(buffer);
+      setReceiverOutput(output);
+    } catch (error: any) {
+      setReceiverOutput(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runOllama = async () => {
+    setLoading(true);
+    try {
+      // Mocking Ollama call via backend
+      const response = await fetch('http://127.0.0.1:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: "MOCK_TOKEN", query: ollamaQuery, model: "llama3" })
+      });
+      const data = await response.json();
+      setOllamaResponse(data.response);
+    } catch (error) {
+      setOllamaResponse("AI Bridge Error: Backend not reachable or Ollama not running.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Load vault from local storage
   useEffect(() => {
@@ -95,6 +149,18 @@ export default function SynapseDashboard() {
             cursor: 'pointer'
           }}
         >Neural Vault</button>
+        <button 
+          onClick={() => setActiveTab('receiver')}
+          style={{ 
+            padding: '12px 4px', 
+            background: 'none', 
+            border: 'none', 
+            borderBottom: activeTab === 'receiver' ? '2px solid var(--primary)' : '2px solid transparent',
+            color: activeTab === 'receiver' ? 'var(--primary)' : 'var(--text-secondary)',
+            fontWeight: 500,
+            cursor: 'pointer'
+          }}
+        >Receiver</button>
       </div>
 
       {activeTab === 'forge' && (
@@ -127,13 +193,16 @@ export default function SynapseDashboard() {
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
-            {/* Steps remain same as previous version but styled better */}
             <div className="card" style={{ background: '#fff' }}>
-              <label style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>1. Payload</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>1. Payload</label>
+                <input type="file" id="payload-file" hidden onChange={handleFileUpload} />
+                <label htmlFor="payload-file" className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }}>Upload File</label>
+              </div>
               <textarea 
                 className="google-input" 
                 style={{ height: '200px', marginTop: '16px' }} 
-                placeholder="Paste knowledge base here..."
+                placeholder="Paste knowledge or upload file..."
                 value={payload}
                 onChange={(e) => setPayload(e.target.value)}
               />
@@ -147,14 +216,20 @@ export default function SynapseDashboard() {
               <div className="form-group">
                 <label>Neural Density</label>
                 <select className="google-select">
-                  <option>Standard (1.0x)</option>
-                  <option>Sparse (0.5x)</option>
-                  <option>Dense (2.0x)</option>
+                  <option value="1.0">Standard (1.0x) - Recommended</option>
+                  <option value="0.5">Sparse (0.5x) - Maximum Stealth</option>
+                  <option value="2.0">Dense (2.0x) - High Capacity</option>
                 </select>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                  Determines how many neural layers are modified to hide the data.
+                </p>
               </div>
             </div>
             <div className="card" style={{ background: '#fff' }}>
-              <label style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>3. Security</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>3. Security</label>
+                <button className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }} onClick={generatePasskey}>Generate</button>
+              </div>
               <div className="form-group" style={{ marginTop: '16px' }}>
                 <label>Master Passkey</label>
                 <input type="password" className="google-input" value={passkey} onChange={(e) => setPasskey(e.target.value)} />
@@ -171,6 +246,51 @@ export default function SynapseDashboard() {
             </div>
           </div>
         </>
+      )}
+
+      {activeTab === 'receiver' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          <div className="card">
+            <h2 style={{ fontSize: '20px', fontWeight: 500, marginBottom: '24px' }}>Unmask Payload</h2>
+            <div className="form-group">
+              <label>Select Neural Mask (.safetensors)</label>
+              <input type="file" onChange={(e) => setReceiverFile(e.target.files?.[0] || null)} className="google-input" />
+            </div>
+            <div className="form-group">
+              <label>Security Passkey</label>
+              <input type="password" value={receiverPasskey} onChange={(e) => setReceiverPasskey(e.target.value)} className="google-input" />
+            </div>
+            <button className="btn btn-primary" onClick={handleUnmask} disabled={loading || !receiverFile}>
+              {loading ? 'Unmasking...' : 'Extract Knowledge'}
+            </button>
+            {receiverOutput && (
+              <div style={{ marginTop: '24px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Extracted Data</label>
+                <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', marginTop: '8px' }}>{receiverOutput}</pre>
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2 style={{ fontSize: '20px', fontWeight: 500, marginBottom: '24px' }}>Ollama Bridge</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
+              Query the local LLM using the unmasked knowledge base as context.
+            </p>
+            <div className="form-group">
+              <label>Question</label>
+              <input type="text" value={ollamaQuery} onChange={(e) => setOllamaQuery(e.target.value)} className="google-input" placeholder="Ask about the payload..." />
+            </div>
+            <button className="btn btn-primary" onClick={runOllama} disabled={loading || !ollamaQuery}>
+              <span className="material-icons">psychology</span> Run Inference
+            </button>
+            {ollamaResponse && (
+              <div style={{ marginTop: '24px', padding: '16px', background: '#e8f0fe', borderRadius: '8px', color: 'var(--primary)' }}>
+                <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Ollama Response</label>
+                <p style={{ fontSize: '14px', marginTop: '8px', lineHeight: 1.5 }}>{ollamaResponse}</p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {activeTab === 'vault' && (
