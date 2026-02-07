@@ -127,8 +127,18 @@ def main():
     
     if auth_choice == "B":
         ts = SynapseTokenSystem()
-        token, key = ts.generate_access_token(mask)
+        try:
+            duration = input("Enter Token Duration in Hours (default 24, 0 for infinite): ")
+            hours = int(duration) if duration.strip() else 24
+        except:
+            hours = 24
+            
+        # 0 hours = 100 years (simulated infinite)
+        expiry = hours if hours > 0 else 876000 
+        
+        token, key = ts.generate_access_token(mask, expiry_hours=expiry)
         print(f"\n\033[1;32m[+] Neural Access Token Generated:\033[0m {token}")
+        print(f"[*] Neural Seed (Backup): {key}")
         print(f"[*] Save this token! It is the only way to unlock the data.")
     else:
         key = input("\033[1;32m[3]\033[0m Set Secret Passkey: ")
