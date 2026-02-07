@@ -39,7 +39,7 @@ export class SynapseEngine {
     return (crc ^ 0xffffffff) >>> 0;
   }
 
-  public async forge(payload: string | Uint8Array, maskName: string): Promise<{ filename: string, buffer: ArrayBuffer }> {
+  public async forge(payload: string | Uint8Array, maskName: string, originalFilename?: string): Promise<{ filename: string, buffer: ArrayBuffer }> {
     await this.init();
     
     const rawData = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
@@ -52,7 +52,7 @@ export class SynapseEngine {
     const bits: number[] = [];
     protectedPayload.forEach(byte => {
       for (let i = 0; i < 8; i++) {
-        bits.append((byte >> i) & 1);
+        bits.push((byte >> i) & 1);
       }
     });
 
@@ -82,7 +82,8 @@ export class SynapseEngine {
       "__metadata__": {
         "type": "synapse_v1_hardened",
         "payload_bytes": rawData.length.toString(),
-        "total_bytes": protectedPayload.length.toString()
+        "total_bytes": protectedPayload.length.toString(),
+        "filename": originalFilename || (typeof payload === 'string' ? "knowledge.txt" : "payload.bin")
       },
       "stealth_weights": {
         "dtype": "F32",
@@ -105,7 +106,13 @@ export class SynapseEngine {
     new Uint8Array(finalBuffer, 8, paddedHeader.length).set(paddedHeader);
     new Uint8Array(finalBuffer, 8 + paddedHeader.length).set(weightData);
 
-  public async unmask(buffer: ArrayBuffer): Promise<string> {
+    return {
+      filename: `synapse_${maskName.toLowerCase().replace(/\s+/g, '_')}.safetensors`,
+      buffer: finalBuffer
+    };
+  }
+
+  public async unmask(buffer: ArrayBuffer): Promise<{ data: Uint8Array, filename: string }> {
     await this.init();
     const view = new DataView(buffer);
     const headerLen = Number(view.getBigUint64(0, true));
@@ -114,6 +121,7 @@ export class SynapseEngine {
     
     const origSize = parseInt(header.__metadata__.payload_bytes);
     const totalSize = parseInt(header.__metadata__.total_bytes);
+    const filename = header.__metadata__.filename || "restored_payload.bin";
     const numWeights = header.stealth_weights.shape[0];
     
     const weightBuf = new Uint8Array(buffer, 8 + headerLen);
@@ -145,6 +153,6 @@ export class SynapseEngine {
       throw new Error("Integrity check failed: Checksum mismatch.");
     }
 
-    return new TextDecoder().decode(payload);
+    return { data: payload, filename };
   }
 }

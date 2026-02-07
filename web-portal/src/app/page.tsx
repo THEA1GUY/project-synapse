@@ -21,11 +21,24 @@ export default function SynapseDashboard() {
   const [vault, setVault] = useState<ForgeResult[]>([]);
   const [receiverFile, setReceiverFile] = useState<File | null>(null);
   const [receiverPasskey, setReceiverPasskey] = useState('');
-  const [receiverOutput, setReceiverOutput] = useState('');
+  const [receiverOutput, setReceiverOutput] = useState<{ data: Uint8Array, filename: string } | null>(null);
   const [ollamaQuery, setOllamaQuery] = useState('');
   const [ollamaResponse, setOllamaResponse] = useState('');
   const [verifyTokenInput, setVerifyTokenInput] = useState('');
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean, seed?: string, error?: string } | null>(null);
+  const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
+
+  // Load vault from local storage
+  useEffect(() => {
+    const savedVault = localStorage.getItem('synapse_vault');
+    if (savedVault) setVault(JSON.parse(savedVault));
+  }, []);
+
+  const saveToVault = (newResult: ForgeResult) => {
+    const updatedVault = [newResult, ...vault];
+    setVault(updatedVault);
+    localStorage.setItem('synapse_vault', JSON.stringify(updatedVault));
+  };
 
   const generatePasskey = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
@@ -37,9 +50,35 @@ export default function SynapseDashboard() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setOriginalFilename(file.name);
       const reader = new FileReader();
       reader.onload = (event) => setPayload(event.target?.result as string);
       reader.readAsText(file);
+    }
+  };
+
+  const handleForge = async () => {
+    setLoading(true);
+    try {
+      const engine = new SynapseEngine(passkey);
+      const { filename, buffer } = await engine.forge(payload, maskName, originalFilename);
+      const blob = new Blob([buffer], { type: 'application/octet-stream' });
+      
+      const mockToken = "SYN-WEB-" + btoa(JSON.stringify({ pld: maskName, exp: Date.now() + 86400000 })).substring(0, 32);
+
+      setResult({ token: mockToken, file: filename, blob: blob });
+      
+      saveToVault({
+        id: Math.random().toString(36).substring(7),
+        maskName,
+        token: mockToken,
+        fileName: filename,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error("Forge failed:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,17 +91,39 @@ export default function SynapseDashboard() {
       const output = await engine.unmask(buffer);
       setReceiverOutput(output);
     } catch (error: any) {
-      setReceiverOutput(`Error: ${error.message}`);
+      alert(`Unmask Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const downloadFile = () => {
+    if (!result?.blob || !result?.file) return;
+    const url = window.URL.createObjectURL(result.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = result.file;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadDecryptedFile = () => {
+    if (!receiverOutput) return;
+    const blob = new Blob([receiverOutput.data], { type: 'application/octet-stream' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = receiverOutput.filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const runOllama = async () => {
+    if (!receiverOutput) return;
     setLoading(true);
     try {
-      // Send query + context to backend
-      const combinedQuery = `${ollamaQuery}|CONTEXT:${receiverOutput}`;
+      const text = new TextDecoder().decode(receiverOutput.data);
+      const combinedQuery = `${ollamaQuery}|CONTEXT:${text}`;
       const response = await fetch('http://127.0.0.1:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,53 +153,6 @@ export default function SynapseDashboard() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Load vault from local storage
-  useEffect(() => {
-    const savedVault = localStorage.getItem('synapse_vault');
-    if (savedVault) setVault(JSON.parse(savedVault));
-  }, []);
-
-  const saveToVault = (newResult: ForgeResult) => {
-    const updatedVault = [newResult, ...vault];
-    setVault(updatedVault);
-    localStorage.setItem('synapse_vault', JSON.stringify(updatedVault));
-  };
-
-  const handleForge = async () => {
-    setLoading(true);
-    try {
-      const engine = new SynapseEngine(passkey);
-      const { filename, buffer } = await engine.forge(payload, maskName);
-      const blob = new Blob([buffer], { type: 'application/octet-stream' });
-      
-      const mockToken = "SYN-WEB-" + btoa(JSON.stringify({ pld: maskName, exp: Date.now() + 86400000 })).substring(0, 32);
-
-      setResult({ token: mockToken, file: filename, blob: blob });
-      
-      saveToVault({
-        id: Math.random().toString(36).substring(7),
-        maskName,
-        token: mockToken,
-        fileName: filename,
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error("Forge failed:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const downloadFile = () => {
-    if (!result?.blob || !result?.file) return;
-    const url = window.URL.createObjectURL(result.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = result.file;
-    a.click();
-    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -191,7 +205,7 @@ export default function SynapseDashboard() {
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Secure Knowledge Injection Interface</p>
             </div>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn btn-text" onClick={() => { setPayload(''); setMaskName(''); setPasskey(''); setResult(null); }}>Clear</button>
+              <button className="btn btn-text" onClick={() => { setPayload(''); setMaskName(''); setPasskey(''); setResult(null); setOriginalFilename(undefined); }}>Clear</button>
               <button className="btn btn-primary" onClick={handleForge} disabled={loading || !payload || !maskName || !passkey}>
                 <span className="material-icons" style={{ fontSize: '18px' }}>bolt</span>
                 {loading ? 'Forging...' : 'Forge Mask'}
@@ -233,6 +247,7 @@ export default function SynapseDashboard() {
                 value={payload}
                 onChange={(e) => setPayload(e.target.value)}
               />
+              {originalFilename && <p style={{ fontSize: '11px', color: 'var(--success)', marginTop: '8px' }}>Loaded: {originalFilename}</p>}
             </div>
             <div className="card" style={{ background: '#fff' }}>
               <label style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>2. Identity</label>
@@ -296,8 +311,13 @@ export default function SynapseDashboard() {
               </button>
               {receiverOutput && (
                 <div style={{ marginTop: '24px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                  <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Extracted Content</label>
-                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', marginTop: '8px', maxHeight: '200px', overflow: 'auto' }}>{receiverOutput}</pre>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Extracted Content</label>
+                    <button className="btn btn-text" style={{ fontSize: '10px' }} onClick={downloadDecryptedFile}>Regenerate File</button>
+                  </div>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', maxHeight: '200px', overflow: 'auto' }}>
+                    {new TextDecoder().decode(receiverOutput.data)}
+                  </pre>
                 </div>
               )}
             </div>
@@ -332,7 +352,7 @@ export default function SynapseDashboard() {
             <div style={{ background: '#303134', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
               <label style={{ fontSize: '10px', color: '#9aa0a6', fontWeight: 700 }}>ACTIVE CONTEXT</label>
               <div style={{ fontSize: '13px', marginTop: '4px', color: receiverOutput ? '#8ab4f8' : '#5f6368' }}>
-                {receiverOutput ? `Loaded: ${receiverOutput.substring(0, 50)}...` : 'No context unmasked. Decrypt a LoRA first.'}
+                {receiverOutput ? `Loaded: ${receiverOutput.filename}` : 'No context unmasked. Decrypt a LoRA first.'}
               </div>
             </div>
             <div className="form-group">
