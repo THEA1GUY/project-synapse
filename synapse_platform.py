@@ -31,40 +31,45 @@ async def health():
 @app.post("/chat")
 async def secure_chat(request: ChatRequest):
     # 1. Token Verification
-    ts = SynapseTokenSystem()
-    seed, err = ts.verify_token(request.token)
-    if err:
-        raise HTTPException(status_code=401, detail=f"Token Invalid: {err}")
-    
-    # 2. Extract context from the matching mask
-    # For this version, we look for a .safetensors in the vault that matches the token's payload name
-    try:
-        # In a real system, the token payload contains the filename.
-        # Here we simulate finding it.
-        context = "GHOST CONTEXT: [Verified spectral payload active]"
+    # If token is "LOCAL_CONTEXT", we bypass token check and use ad-hoc context (for testing/local UI)
+    context = ""
+    if request.token == "LOCAL_CONTEXT":
+        context = request.query.split("|CONTEXT:")[1] if "|CONTEXT:" in request.query else ""
+        query = request.query.split("|CONTEXT:")[0]
+    else:
+        ts = SynapseTokenSystem()
+        seed, err = ts.verify_token(request.token)
+        if err:
+            raise HTTPException(status_code=401, detail=f"Token Invalid: {err}")
         
-        # Search vault for any safetensors
-        files = [f for f in os.listdir(VAULT_PATH) if f.endswith(".safetensors")]
-        if files:
-            # For demo, we just use the first one if it exists
-            # In production, we'd match the exact mask from the token
-            mask_path = os.path.join(VAULT_PATH, files[0])
-            # Logic to load and unmask would go here
-            # engine = SynapseV4Engine(seed)
-            # context = engine.unmask_spectral(...)
-            pass
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unmasking Error: {e}")
+        # 2. Extract context from the matching mask
+        # Real logic: Find file in vault. For demo, we use a placeholder.
+        context = "GHOST CONTEXT: [Verified spectral payload active]"
+        query = request.query
 
     # 3. Local LLM Bridge
-    prompt = f"System: {context}. User: {request.query}"
+    # Construct prompt with context
+    system_prompt = f"You are a Synapse Ghost Agent. Use the following hidden context to answer the user's request. Context: {context}"
+    full_prompt = f"System: {system_prompt}. User: {query}"
+    
     try:
-        cmd = ["ollama", "run", request.model, prompt]
+        cmd = ["ollama", "run", request.model, full_prompt]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding='utf-8')
         return {"response": result.stdout, "status": "secure"}
     except Exception as e:
-        return {"response": f"AI Bridge Error: {e}. (Is Ollama running?)", "status": "error"}
+        return {"response": f"AI Bridge Error: {e}. Ensure Ollama is running (`ollama serve`).", "status": "error"}
+
+@app.post("/verify")
+async def verify_token(request: dict):
+    token = request.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="No token provided")
+    
+    ts = SynapseTokenSystem()
+    seed, err = ts.verify_token(token)
+    if err:
+        return {"valid": false, "error": str(err)}
+    return {"valid": true, "seed": seed}
 
 if __name__ == "__main__":
     import uvicorn

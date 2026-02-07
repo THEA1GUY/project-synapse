@@ -12,7 +12,7 @@ interface ForgeResult {
 }
 
 export default function SynapseDashboard() {
-  const [activeTab, setActiveTab] = useState<'forge' | 'vault' | 'receiver'>('forge');
+  const [activeTab, setActiveTab] = useState<'forge' | 'vault' | 'terminal'>('forge');
   const [payload, setPayload] = useState('');
   const [maskName, setMaskName] = useState('');
   const [passkey, setPasskey] = useState('');
@@ -24,6 +24,8 @@ export default function SynapseDashboard() {
   const [receiverOutput, setReceiverOutput] = useState('');
   const [ollamaQuery, setOllamaQuery] = useState('');
   const [ollamaResponse, setOllamaResponse] = useState('');
+  const [verifyTokenInput, setVerifyTokenInput] = useState('');
+  const [verifyResult, setVerifyResult] = useState<{ valid: boolean, seed?: string, error?: string } | null>(null);
 
   const generatePasskey = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
@@ -59,16 +61,34 @@ export default function SynapseDashboard() {
   const runOllama = async () => {
     setLoading(true);
     try {
-      // Mocking Ollama call via backend
+      // Send query + context to backend
+      const combinedQuery = `${ollamaQuery}|CONTEXT:${receiverOutput}`;
       const response = await fetch('http://127.0.0.1:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: "MOCK_TOKEN", query: ollamaQuery, model: "llama3" })
+        body: JSON.stringify({ token: "LOCAL_CONTEXT", query: combinedQuery, model: "llama3" })
       });
       const data = await response.json();
       setOllamaResponse(data.response);
     } catch (error) {
       setOllamaResponse("AI Bridge Error: Backend not reachable or Ollama not running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyToken = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: verifyTokenInput })
+      });
+      const data = await response.json();
+      setVerifyResult(data);
+    } catch (error) {
+      setVerifyResult({ valid: false, error: "Verification server unreachable." });
     } finally {
       setLoading(false);
     }
@@ -150,17 +170,17 @@ export default function SynapseDashboard() {
           }}
         >Neural Vault</button>
         <button 
-          onClick={() => setActiveTab('receiver')}
+          onClick={() => setActiveTab('terminal')}
           style={{ 
             padding: '12px 4px', 
             background: 'none', 
             border: 'none', 
-            borderBottom: activeTab === 'receiver' ? '2px solid var(--primary)' : '2px solid transparent',
-            color: activeTab === 'receiver' ? 'var(--primary)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'terminal' ? '2px solid var(--primary)' : '2px solid transparent',
+            color: activeTab === 'terminal' ? 'var(--primary)' : 'var(--text-secondary)',
             fontWeight: 500,
             cursor: 'pointer'
           }}
-        >Receiver</button>
+        >Intelligence</button>
       </div>
 
       {activeTab === 'forge' && (
@@ -184,6 +204,13 @@ export default function SynapseDashboard() {
               <h3 style={{ marginBottom: '16px', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span className="material-icons">verified</span> Mask Ready
               </h3>
+              <div style={{ padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0', marginBottom: '16px' }}>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)' }}>NEURAL ACCESS TOKEN</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                  <code style={{ flex: 1, background: '#f8f9fa', padding: '8px', borderRadius: '4px', fontSize: '12px' }}>{result.token}</code>
+                  <button className="btn btn-text" onClick={() => navigator.clipboard.writeText(result.token!)}>Copy</button>
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button className="btn btn-outline" onClick={downloadFile}>
                   <span className="material-icons" style={{ fontSize: '18px' }}>download</span> Download {result.file}
@@ -248,45 +275,85 @@ export default function SynapseDashboard() {
         </>
       )}
 
-      {activeTab === 'receiver' && (
+      {activeTab === 'terminal' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
-          <div className="card">
-            <h2 style={{ fontSize: '20px', fontWeight: 500, marginBottom: '24px' }}>Unmask Payload</h2>
-            <div className="form-group">
-              <label>Select Neural Mask (.safetensors)</label>
-              <input type="file" onChange={(e) => setReceiverFile(e.target.files?.[0] || null)} className="google-input" />
-            </div>
-            <div className="form-group">
-              <label>Security Passkey</label>
-              <input type="password" value={receiverPasskey} onChange={(e) => setReceiverPasskey(e.target.value)} className="google-input" />
-            </div>
-            <button className="btn btn-primary" onClick={handleUnmask} disabled={loading || !receiverFile}>
-              {loading ? 'Unmasking...' : 'Extract Knowledge'}
-            </button>
-            {receiverOutput && (
-              <div style={{ marginTop: '24px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Extracted Data</label>
-                <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', marginTop: '8px' }}>{receiverOutput}</pre>
+          <div>
+            <div className="card" style={{ marginBottom: '32px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 500, marginBottom: '24px' }}>Incoming Intelligence</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
+                Decrypt neural masks received from other users.
+              </p>
+              <div className="form-group">
+                <label>Received LoRA (.safetensors)</label>
+                <input type="file" onChange={(e) => setReceiverFile(e.target.files?.[0] || null)} className="google-input" />
               </div>
-            )}
+              <div className="form-group">
+                <label>Security Passkey</label>
+                <input type="password" value={receiverPasskey} onChange={(e) => setReceiverPasskey(e.target.value)} className="google-input" placeholder="Passkey provided by sender" />
+              </div>
+              <button className="btn btn-primary" onClick={handleUnmask} disabled={loading || !receiverFile}>
+                {loading ? 'Decrypting...' : 'Extract Payload'}
+              </button>
+              {receiverOutput && (
+                <div style={{ marginTop: '24px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                  <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Extracted Content</label>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', marginTop: '8px', maxHeight: '200px', overflow: 'auto' }}>{receiverOutput}</pre>
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <h2 style={{ fontSize: '18px', fontWeight: 500, marginBottom: '24px' }}>Token Verification</h2>
+              <div className="form-group">
+                <label>SYN- Access Token</label>
+                <input type="text" value={verifyTokenInput} onChange={(e) => setVerifyTokenInput(e.target.value)} className="google-input" placeholder="Paste SYN- token to verify" />
+              </div>
+              <button className="btn btn-outline" onClick={handleVerifyToken} disabled={loading || !verifyTokenInput}>
+                Verify Validity
+              </button>
+              {verifyResult && (
+                <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: verifyResult.valid ? '#e6f4ea' : '#fce8e6', color: verifyResult.valid ? '#137333' : '#c5221f' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span className="material-icons">{verifyResult.valid ? 'check_circle' : 'error'}</span>
+                    <strong>{verifyResult.valid ? 'Verified Token' : 'Invalid Token'}</strong>
+                  </div>
+                  {verifyResult.valid && <p style={{ fontSize: '12px', marginTop: '4px' }}>Payload: {verifyResult.seed}</p>}
+                  {verifyResult.error && <p style={{ fontSize: '12px', marginTop: '4px' }}>{verifyResult.error}</p>}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="card">
-            <h2 style={{ fontSize: '20px', fontWeight: 500, marginBottom: '24px' }}>Ollama Bridge</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
-              Query the local LLM using the unmasked knowledge base as context.
+          <div className="card" style={{ background: '#202124', color: '#fff' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 500, marginBottom: '24px', color: '#fff' }}>Ghost Chat (Ollama)</h2>
+            <p style={{ color: '#9aa0a6', fontSize: '14px', marginBottom: '24px' }}>
+              Interface with hidden knowledge using high-fidelity local inference.
             </p>
-            <div className="form-group">
-              <label>Question</label>
-              <input type="text" value={ollamaQuery} onChange={(e) => setOllamaQuery(e.target.value)} className="google-input" placeholder="Ask about the payload..." />
+            <div style={{ background: '#303134', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
+              <label style={{ fontSize: '10px', color: '#9aa0a6', fontWeight: 700 }}>ACTIVE CONTEXT</label>
+              <div style={{ fontSize: '13px', marginTop: '4px', color: receiverOutput ? '#8ab4f8' : '#5f6368' }}>
+                {receiverOutput ? `Loaded: ${receiverOutput.substring(0, 50)}...` : 'No context unmasked. Decrypt a LoRA first.'}
+              </div>
             </div>
-            <button className="btn btn-primary" onClick={runOllama} disabled={loading || !ollamaQuery}>
+            <div className="form-group">
+              <label style={{ color: '#e8eaed' }}>Query</label>
+              <input 
+                type="text" 
+                value={ollamaQuery} 
+                onChange={(e) => setOllamaQuery(e.target.value)} 
+                style={{ background: '#3c4043', border: 'none', color: '#fff', padding: '12px', borderRadius: '4px', width: '100%' }} 
+                placeholder="Ask your Ghost Agent..." 
+              />
+            </div>
+            <button className="btn btn-primary" onClick={runOllama} disabled={loading || !ollamaQuery || !receiverOutput} style={{ background: '#8ab4f8', color: '#202124' }}>
               <span className="material-icons">psychology</span> Run Inference
             </button>
             {ollamaResponse && (
-              <div style={{ marginTop: '24px', padding: '16px', background: '#e8f0fe', borderRadius: '8px', color: 'var(--primary)' }}>
-                <label style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>Ollama Response</label>
-                <p style={{ fontSize: '14px', marginTop: '8px', lineHeight: 1.5 }}>{ollamaResponse}</p>
+              <div style={{ marginTop: '32px', borderTop: '1px solid #3c4043', paddingTop: '20px' }}>
+                <label style={{ fontWeight: 700, fontSize: '10px', color: '#9aa0a6', textTransform: 'uppercase' }}>Inference Response</label>
+                <div style={{ fontSize: '14px', marginTop: '12px', lineHeight: 1.6, color: '#e8eaed' }}>
+                  {ollamaResponse}
+                </div>
               </div>
             )}
           </div>
