@@ -1,0 +1,116 @@
+/* Global Design Tokens (Google Material 3 / Stitch Inspired) */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500&display=swap');
+
+:root {
+  --primary: #1a73e8; /* Google Blue */
+  --on-primary: #ffffff;
+  --bg-app: #f8f9fa;
+  --bg-surface: #ffffff;
+  --border: #dadce0;
+  --text-primary: #202124;
+  --text-secondary: #5f6368;
+  --hover-state: #f1f3f4;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-card: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --success: #137333;
+  --error: #d93025;
+}
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3 {
+  font-family: 'Google Sans', sans-serif;
+  margin: 0;
+}
+
+/* Base Styles */
+.btn {
+  height: 36px;
+  padding: 0 24px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  font-family: 'Google Sans', sans-serif;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 1px 2px rgba(60,64,67,0.3);
+}
+
+.btn-primary:hover {
+  background: #1765cc;
+  box-shadow: 0 1px 3px 1px rgba(60,64,67,0.15);
+}
+
+.btn-text {
+  background: transparent;
+  color: var(--primary);
+}
+
+.btn-text:hover {
+  background: rgba(26, 115, 232, 0.04);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--primary);
+}
+
+.btn-outline:hover {
+  background: var(--hover-state);
+}
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+}
+
+.google-input, .google-select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  transition: border 0.2s;
+  font-family: 'Roboto', sans-serif;
+  box-sizing: border-box;
+}
+
+.google-input:focus, .google-select:focus {
+  border-color: var(--primary);
+  outline: none;
+  border-width: 2px;
+  padding: 9px 11px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
