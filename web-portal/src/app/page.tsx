@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SynapseEngine } from '@/lib/SynapseEngine';
 
 interface ForgeResult {
@@ -17,6 +17,8 @@ export default function SynapseDashboard() {
   const [maskName, setMaskName] = useState('');
   const [passkey, setPasskey] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
   const [result, setResult] = useState<{ token?: string, file?: string, blob?: Blob } | null>(null);
   const [vault, setVault] = useState<ForgeResult[]>([]);
   const [receiverFile, setReceiverFile] = useState<File | null>(null);
@@ -29,6 +31,7 @@ export default function SynapseDashboard() {
   const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
   const [showPasskey, setShowPasskey] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [density, setDensity] = useState(1.0);
 
   // Load vault from local storage
   useEffect(() => {
@@ -68,41 +71,77 @@ export default function SynapseDashboard() {
 
   const handleForge = async () => {
     setLoading(true);
+    setProgress(0);
+    setStatusMessage('Initializing Neural Core...');
+    
     try {
       const engine = new SynapseEngine(passkey);
-      const { filename, buffer } = await engine.forge(payload, maskName, originalFilename);
+      
+      const { filename, buffer } = await engine.forge(
+        payload, 
+        maskName, 
+        originalFilename,
+        density,
+        (p, status) => {
+          setProgress(p);
+          if (status) setStatusMessage(status);
+        }
+      );
+
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
       
-      const mockToken = "SYN-WEB-" + btoa(JSON.stringify({ pld: maskName, exp: Date.now() + 86400000 })).substring(0, 32);
+      // Verification Hash (Real backend call)
+      setStatusMessage('Registering Access Token...');
+      const response = await fetch('/api/forge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maskName, payloadSize: payload.length })
+      });
+      const data = await response.json();
 
-      setResult({ token: mockToken, file: filename, blob: blob });
+      setResult({ token: data.token, file: filename, blob: blob });
       
       saveToVault({
         id: Math.random().toString(36).substring(7),
         maskName,
-        token: mockToken,
+        token: data.token,
         fileName: filename,
         timestamp: Date.now()
       });
+      
+      setProgress(100);
+      setStatusMessage('Foundry Output Ready.');
     } catch (error) {
       console.error("Forge failed:", error);
+      setStatusMessage('Neural Collapse Detected.');
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+        setProgress(0);
+      }, 1000);
     }
   };
 
   const handleUnmask = async () => {
     if (!receiverFile) return;
     setLoading(true);
+    setStatusMessage('Penetrating Neural Layers...');
     try {
       const buffer = await receiverFile.arrayBuffer();
       const engine = new SynapseEngine(receiverPasskey);
-      const output = await engine.unmask(buffer);
+      const output = await engine.unmask(
+        buffer,
+        (p, status) => {
+          setProgress(p);
+          if (status) setStatusMessage(status);
+        }
+      );
       setReceiverOutput(output);
     } catch (error: any) {
       alert(`Unmask Error: ${error.message}`);
     } finally {
       setLoading(false);
+      setStatusMessage('');
     }
   };
 
@@ -165,7 +204,44 @@ export default function SynapseDashboard() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
+      
+      {/* LOADING OVERLAY */}
+      {loading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{ 
+            width: '300px', 
+            height: '4px', 
+            background: '#e0e0e0', 
+            borderRadius: '2px',
+            overflow: 'hidden',
+            marginBottom: '16px'
+          }}>
+            <div style={{ 
+              width: `${progress}%`, 
+              height: '100%', 
+              background: 'var(--primary)',
+              transition: 'width 0.3s ease'
+            }} />
+          </div>
+          <p style={{ fontFamily: 'Google Sans', fontWeight: 500, color: 'var(--text-primary)' }}>{statusMessage}</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>Neural computations in progress...</p>
+        </div>
+      )}
+
       {/* Tab Navigation */}
       <div style={{ display: 'flex', gap: '32px', borderBottom: '1px solid var(--border)', marginBottom: '32px' }}>
         <button 
@@ -269,7 +345,7 @@ export default function SynapseDashboard() {
               </div>
               <div className="form-group">
                 <label>Neural Density</label>
-                <select className="google-select">
+                <select className="google-select" value={density} onChange={(e) => setDensity(parseFloat(e.target.value))}>
                   <option value="1.0">Standard (1.0x) - Recommended</option>
                   <option value="0.5">Sparse (0.5x) - Maximum Stealth</option>
                   <option value="2.0">Dense (2.0x) - High Capacity</option>

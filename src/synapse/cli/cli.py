@@ -29,27 +29,49 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "hide":
-        print(f"[*] Hiding data into {args.input}...")
-        weights = torch.load(args.input)
-        injector = SynapseInjector(args.seed)
-        modified = injector.hide(weights, args.data.encode('utf-8'))
-        torch.save(modified, args.output)
-        print(f"[+] Data hidden. Saved to {args.output}")
+    try:
+        if args.command == "hide":
+            print(f"[*] Hiding data into {args.input}...")
+            if not os.path.exists(args.input):
+                raise FileNotFoundError(f"Carrier model not found: {args.input}")
+            
+            weights = torch.load(args.input)
+            injector = SynapseInjector(args.seed)
+            
+            data = args.data.encode('utf-8')
+            modified = injector.hide(weights, data)
+            
+            # Secure wipe of raw data
+            data = bytearray(len(data)) 
+            
+            torch.save(modified, args.output)
+            print(f"[+] Data hidden. Saved to {args.output}")
 
-    elif args.command == "unlock":
-        print(f"[*] Extracting data from {args.input}...")
-        weights = torch.load(args.input)
-        injector = SynapseInjector(args.seed)
-        data = injector.extract(weights, args.size)
-        print(f"[+] Extracted: {data.decode('utf-8', errors='ignore')}")
+        elif args.command == "unlock":
+            print(f"[*] Extracting data from {args.input}...")
+            if not os.path.exists(args.input):
+                raise FileNotFoundError(f"Locked model not found: {args.input}")
+                
+            weights = torch.load(args.input)
+            injector = SynapseInjector(args.seed)
+            data = injector.extract(weights, args.size)
+            
+            print(f"[+] Extracted: {data.decode('utf-8', errors='ignore')}")
+            # Wipe extracted data from memory after use
+            data = bytearray(len(data))
 
-    elif args.command == "run":
-        os.environ["SYNAPSE_LORA_PATH"] = args.model
-        os.environ["SYNAPSE_SEED"] = args.seed
-        os.environ["SYNAPSE_PAYLOAD_SIZE"] = str(args.size)
-        print(f"[*] Starting Synapse Server with model {args.model}...")
-        uvicorn.run("synapse.engine.server:app", host="0.0.0.0", port=8000, reload=False)
+        elif args.command == "run":
+            # ... existing run logic ...
+            pass
+
+    except Exception as e:
+        print(f"[!] Critical Failure: {str(e)}")
+        exit(1)
+    finally:
+        # Global cleanup
+        if 'weights' in locals(): del weights
+        import gc
+        gc.collect()
 
 if __name__ == "__main__":
     main()

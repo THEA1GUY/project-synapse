@@ -11,10 +11,26 @@ class SynapseInjector:
     def _seed_to_int(self, seed: str) -> int:
         return int(hashlib.sha256(seed.encode()).hexdigest(), 16) % (2**32)
 
-    def _get_shuffled_indices(self, total_elements: int, num_bits: int) -> np.ndarray:
-        indices = np.arange(total_elements)
-        self.rng.shuffle(indices)
-        return indices[:num_bits]
+    def _get_shuffled_indices(self, total_elements: int, num_bits: int) -> List[int]:
+        """
+        Memory-efficient BitSet-based collision handling for large models.
+        """
+        indices = []
+        # Use a bytearray as a bitset to save space (1 bit per weight)
+        bitset = bytearray((total_elements + 7) // 8)
+        
+        count = 0
+        while count < num_bits:
+            idx = self.rng.integers(0, total_elements)
+            # Check if bit is set
+            if not (bitset[idx >> 3] & (1 << (idx & 7))):
+                bitset[idx >> 3] |= (1 << (idx & 7))
+                indices.append(int(idx))
+                count += 1
+        
+        # Explicitly clear bitset memory
+        del bitset
+        return indices
 
     def hide(self, weights: torch.Tensor, data: bytes) -> torch.Tensor:
         """
