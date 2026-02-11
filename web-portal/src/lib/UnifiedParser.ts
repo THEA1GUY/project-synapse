@@ -11,25 +11,23 @@ export async function extractText(data: Uint8Array, filename: string): Promise<s
       const mammoth = await import('mammoth');
       let options: any = {};
       if (typeof window === 'undefined') {
-        // Node environment: use buffer
         options.buffer = Buffer.from(data);
       } else {
-        // Browser environment: use arrayBuffer
         options.arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
       }
       const result = await mammoth.extractRawText(options);
       return result.value;
     }
     
-    // EXCEL
-    if (ext === 'xlsx' || ext === 'xls') {
+    // EXCEL / CSV
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
       const workbook = XLSX.read(data, { type: 'array' });
       let text = '';
       workbook.SheetNames.forEach(sheetName => {
         const sheet = workbook.Sheets[sheetName];
         const sheetText = XLSX.utils.sheet_to_txt(sheet);
         if (sheetText.trim()) {
-           text += sheetText + '\n';
+           text += `--- SHEET: ${sheetName} ---\n${sheetText}\n`;
         }
       });
       return text;
@@ -37,12 +35,7 @@ export async function extractText(data: Uint8Array, filename: string): Promise<s
     
     // PDF
     if (ext === 'pdf') {
-      // Dynamic import to prevent SSR DOM errors
       const pdfjs = await import('pdfjs-dist');
-      
-      // Use the legacy build if on server (Node), or standard on client
-      // Note: pdfjs-dist import behavior varies by version. 
-      // We set the workerSrc dynamically.
       if (typeof window !== 'undefined') {
         pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
       }
@@ -63,7 +56,13 @@ export async function extractText(data: Uint8Array, filename: string): Promise<s
       return fullText;
     }
 
-    return '';
+    // Try plain text decoding for everything else
+    try {
+      const decoder = new TextDecoder('utf-8', { fatal: true });
+      return decoder.decode(data);
+    } catch {
+      return ''; 
+    }
 
   } catch (error) {
     console.error(`UnifiedParser: Error parsing file ${filename}`, error);

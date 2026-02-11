@@ -6,13 +6,26 @@ import os
 import zlib
 import subprocess
 import time
+import io
 
-# Try to import pypdf for PDF text extraction
+# Optional Intelligence Extraction Libraries
 try:
     from pypdf import PdfReader
     HAS_PYPDF = True
 except ImportError:
     HAS_PYPDF = False
+
+try:
+    import docx
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
 
 from synapse_token import SynapseTokenSystem
 
@@ -42,7 +55,6 @@ class SynapseUnmasker:
                 header = json.loads(header_raw.decode('utf-8'))
                 
                 meta = header["__metadata__"]
-                # Hardening: Ensure indices are integers even if stored as strings
                 original_size = int(meta["payload_bytes"])
                 total_bytes = int(meta["total_bytes"])
                 original_filename = meta.get("original_filename", "extracted_file.bin")
@@ -51,14 +63,12 @@ class SynapseUnmasker:
                 weight_data = f.read()
                 weights = struct.unpack(f'{weight_shape}f', weight_data)
 
-            # Reconstruct indices
             num_bits = total_bytes * 8
             random.seed(self.random_seed)
             indices = list(range(len(weights)))
             random.shuffle(indices)
             target_indices = indices[:num_bits]
             
-            # Extract Bits
             PRECISION = 1000000
             bits = []
             for idx in target_indices:
@@ -66,7 +76,6 @@ class SynapseUnmasker:
                 scaled = int(round(val * PRECISION))
                 bits.append(scaled & 1)
                 
-            # Convert bits to bytes
             buffer = bytearray()
             for i in range(0, len(bits), 8):
                 byte = 0
@@ -74,13 +83,10 @@ class SynapseUnmasker:
                     if bits[i + j]: byte |= (1 << j)
                 buffer.append(byte)
             
-            # Split payload and Checksum
             extracted_payload = bytes(buffer[:original_size])
             stored_checksum = struct.unpack('<I', buffer[original_size:original_size+4])[0]
             
-            # VERIFY
             calculated_checksum = zlib.crc32(extracted_payload) & 0xffffffff
-            
             if calculated_checksum != stored_checksum:
                 return None, None, "INTEGRITY FAILURE: Data corruption or wrong passkey."
             
@@ -89,80 +95,62 @@ class SynapseUnmasker:
         except Exception as e:
             return None, None, f"TECHNICAL ERROR: {str(e)}"
 
-    def extract_pdf_text(self, filepath):
-        if not HAS_PYPDF:
-            return None
+    def extract_intelligence(self, payload, filename):
+        ext = filename.split('.')[-1].lower() if '.' in filename else ''
+        
         try:
-            reader = PdfReader(filepath)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-            return text
+            # PDF
+            if ext == 'pdf' and HAS_PYPDF:
+                reader = PdfReader(io.BytesIO(payload))
+                return "\n".join([page.extract_text() for page in reader.pages])
+            
+            # DOCX
+            if ext == 'docx' and HAS_DOCX:
+                doc = docx.Document(io.BytesIO(payload))
+                return "\n".join([para.text for para in doc.paragraphs])
+            
+            # EXCEL
+            if ext in ['xlsx', 'xls'] and HAS_PANDAS:
+                df = pd.read_excel(io.BytesIO(payload))
+                return df.to_string()
+            
+            # CSV
+            if ext == 'csv':
+                try:
+                    return payload.decode('utf-8')
+                except:
+                    if HAS_PANDAS:
+                        df = pd.read_csv(io.BytesIO(payload))
+                        return df.to_string()
+
+            # Fallback to plain text
+            return payload.decode('utf-8')
         except Exception as e:
-            print(f"[!] PDF Extraction Error: {e}")
+            print(f"[*] Extraction failed for {filename}: {e}")
             return None
 
-    def run_ollama(self, model, payload, query):
+    def run_ollama(self, model, payload, filename, query):
         print(f"\n🚀 [Synapse] Injecting Ghost Context into {model}...")
         
-        is_binary = False
-        try:
-            if b'\x00' in payload:
-                is_binary = True
-            context_text = payload.decode('utf-8')
-            if len([c for c in context_text if ord(c) > 127]) / len(context_text) > 0.3:
-                is_binary = True
-        except:
-            is_binary = True
-
-        if is_binary:
+        extracted_text = self.extract_intelligence(payload, filename)
+        
+        if extracted_text and extracted_text.strip():
+            print(f"✅ Intelligence Extracted ({filename}). Re-enabling Ghost RAG.")
+            prompt = f"System: Use this hidden context for the following query. Context: {extracted_text}. User: {query}"
+            context_snippet = extracted_text[:100].replace('\n', ' ')
+        else:
             temp_filename = f"synapse_ghost_media_{int(time.time())}.tmp"
-            
-            # Detect common file types
-            is_pdf = payload.startswith(b'%PDF')
-            ext_map = {
-                b'\xff\xd8\xff': '.jpg',
-                b'\x89PNG\r\n\x1a\n': '.png',
-                b'GIF87a': '.gif',
-                b'GIF89a': '.gif',
-                b'%PDF': '.pdf',
-                b'PK\x03\x04': '.zip',
-                b'RIFF': '.wav'
-            }
-            
-            for magic, ext in ext_map.items():
-                if payload.startswith(magic):
-                    temp_filename += ext
-                    break
-            
-            with open(temp_filename, "wb") as f:
-                f.write(payload)
-            
+            with open(temp_filename, "wb") as f: f.write(payload)
             print(f"\033[1;33m[BINARY DETECTED]\033[0m File reconstructed: {temp_filename}")
             
-            extracted_text = None
-            if is_pdf:
-                print(f"[*] Attempting PDF Intelligence Extraction...")
-                extracted_text = self.extract_pdf_text(temp_filename)
-                
-            if extracted_text and extracted_text.strip():
-                print(f"✅ Intelligence Extracted. Re-enabling Ghost RAG.")
-                prompt = f"System: Use this hidden context for the following query. Context: {extracted_text}. User: {query}"
-                context_snippet = extracted_text[:100].replace('\n', ' ')
+            is_vision_model = any(m in model.lower() for m in ['llava', 'bakllava', 'vision'])
+            if is_vision_model and temp_filename.lower().endswith(('.jpg', '.png', '.gif')):
+                prompt = f"{query} {os.path.abspath(temp_filename)}"
+                context_snippet = f"[Reconstructed Image: {temp_filename}]"
             else:
-                is_vision_model = any(m in model.lower() for m in ['llava', 'bakllava', 'vision'])
-                if is_vision_model and temp_filename.lower().endswith(('.jpg', '.png', '.gif')):
-                    prompt = f"{query} {os.path.abspath(temp_filename)}"
-                    context_snippet = f"[Reconstructed Image: {temp_filename}]"
-                else:
-                    context_snippet = f"[Binary File: {temp_filename}]"
-                    prompt = f"System: The user has unmasked a binary file ({temp_filename}). You cannot read it directly. User Query: {query}"
-                    if is_pdf and not HAS_PYPDF:
-                        print(f"[*] Tip: Install 'pypdf' (pip install pypdf) to enable direct PDF chatting.")
-        else:
-            prompt = f"System: Use this hidden context for the following query. Context: {context_text}. User: {query}"
-            context_snippet = context_text[:100].replace('\n', ' ')
-        
+                context_snippet = f"[Binary File: {temp_filename}]"
+                prompt = f"System: The user has unmasked a binary file ({temp_filename}). You cannot read it directly. User Query: {query}"
+
         print("-" * 40)
         print(f"GHOST DATA UNMASKED: {context_snippet}...")
         print(f"USER QUERY: {query}")
@@ -212,16 +200,13 @@ def main():
             
             while True:
                 query = input("\n\033[1;34m[You]:\033[0m ")
-                if query.lower() in ['exit', 'quit']:
-                    break
-                
-                response = unmasker.run_ollama(model, payload, query)
+                if query.lower() in ['exit', 'quit']: break
+                response = unmasker.run_ollama(model, payload, original_filename, query)
                 print(f"\n\033[1;36m[AI]:\033[0m\n{response}")
             
         elif choice == '2':
             out_name = "reconstructed_" + os.path.basename(original_filename)
-            with open(out_name, "wb") as f:
-                f.write(payload)
+            with open(out_name, "wb") as f: f.write(payload)
             print(f"\n\033[1;32m[+] File Reconstructed Resident: {os.path.abspath(out_name)}\033[0m")
             
         elif choice == '3':
