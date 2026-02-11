@@ -39,7 +39,7 @@ export class SynapseEngine {
     return (crc ^ 0xffffffff) >>> 0;
   }
 
-  public async forge(payload: string | Uint8Array, maskName: string): Promise<{ filename: string, buffer: ArrayBuffer }> {
+  public async forge(payload: string | Uint8Array, maskName: string, originalFilename?: string): Promise<{ filename: string, buffer: ArrayBuffer }> {
     await this.init();
     
     const rawData = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
@@ -82,7 +82,8 @@ export class SynapseEngine {
       "__metadata__": {
         "type": "synapse_v1_hardened",
         "payload_bytes": rawData.length.toString(),
-        "total_bytes": protectedPayload.length.toString()
+        "total_bytes": protectedPayload.length.toString(),
+        "original_filename": originalFilename || "secret.txt"
       },
       "stealth_weights": {
         "dtype": "F32",

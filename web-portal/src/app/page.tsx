@@ -36,6 +36,7 @@ export default function SynapseDashboard() {
   const [maskName, setMaskName] = useState('');
   const [passkey, setPasskey] = useState('');
   const [loading, setLoading] = useState(false);
+  const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<{ token?: string, file?: string, blob?: Blob } | null>(null);
   const [vault, setVault] = useState<ForgeResult[]>([]);
 
@@ -84,6 +85,16 @@ export default function SynapseDashboard() {
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setOriginalFilename(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => setPayload(event.target?.result as string);
+      reader.readAsText(file);
+    }
+  };
+
   const saveToVault = (newResult: ForgeResult) => {
     const updatedVault = [newResult, ...vault];
     setVault(updatedVault);
@@ -94,7 +105,7 @@ export default function SynapseDashboard() {
     setLoading(true);
     try {
       const engine = new SynapseEngine(passkey);
-      const { filename, buffer } = await engine.forge(payload, maskName);
+      const { filename, buffer } = await engine.forge(payload, maskName, originalFilename);
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
       
       const mockToken = "SYN-WEB-" + btoa(JSON.stringify({ pld: maskName, exp: Date.now() + 86400000 })).substring(0, 32);
@@ -235,7 +246,7 @@ export default function SynapseDashboard() {
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Inject knowledge into model weights</p>
             </div>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn btn-text" onClick={() => { setPayload(''); setMaskName(''); setPasskey(''); setResult(null); }}>Clear</button>
+              <button className="btn btn-text" onClick={() => { setPayload(''); setMaskName(''); setPasskey(''); setResult(null); setOriginalFilename(undefined); }}>Clear</button>
               <button className="btn btn-primary" onClick={handleForge} disabled={loading || !payload || !maskName || !passkey}>
                 {loading ? 'Forging...' : 'Forge Mask'}
               </button>
@@ -257,14 +268,19 @@ export default function SynapseDashboard() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
             <div className="card" style={{ background: '#fff' }}>
-              <label className="label">1. Payload</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label className="label">1. Payload</label>
+                <input type="file" id="payload-file" hidden onChange={handleFileUpload} />
+                <label htmlFor="payload-file" className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }}>Upload File</label>
+              </div>
               <textarea 
                 className="google-input" 
-                style={{ height: '200px', marginTop: '16px' }} 
+                style={{ height: '200px', marginTop: '8px' }} 
                 placeholder="Paste knowledge base here..."
                 value={payload}
                 onChange={(e) => setPayload(e.target.value)}
               />
+              {originalFilename && <p style={{ fontSize: '11px', color: 'var(--success)', marginTop: '8px' }}>Loaded: {originalFilename}</p>}
             </div>
             <div className="card" style={{ background: '#fff' }}>
               <label className="label">2. Identity</label>
