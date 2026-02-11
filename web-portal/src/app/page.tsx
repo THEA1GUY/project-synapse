@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { SynapseEngine } from '@/lib/SynapseEngine';
+import { extractTextFromPdf } from '@/lib/PdfParser';
 
 interface ForgeResult {
   id: string;
@@ -144,9 +145,22 @@ export default function SynapseDashboard() {
       
       setIsBinary(binary);
       
-      const statusMsg = binary 
-        ? `Binary file detected (${result.metadata.original_filename || 'unknown'}). Use the 'Download' button to save it.`
-        : 'Ghost Context Injected. I am now aware of the hidden knowledge.';
+      let statusMsg = '';
+      if (isPdf) {
+        statusMsg = 'Neural PDF Detected. Attempting text extraction...';
+        const pdfText = await extractTextFromPdf(result.payload);
+        if (pdfText.trim()) {
+          result.text = pdfText;
+          setIsBinary(false); // Re-enable chat since we have text
+          statusMsg = 'PDF Intelligence Extracted. Ghost Context Injected.';
+        } else {
+          statusMsg = 'PDF Extraction failed. Content is encrypted or image-based. Use Download button.';
+        }
+      } else if (binary) {
+        statusMsg = `Binary file detected (${result.metadata.original_filename || 'unknown'}). Use the 'Download' button to save it.`;
+      } else {
+        statusMsg = 'Ghost Context Injected. I am now aware of the hidden knowledge.';
+      }
         
       setChatHistory([{ role: 'system', content: statusMsg }]);
     } catch (error) {
