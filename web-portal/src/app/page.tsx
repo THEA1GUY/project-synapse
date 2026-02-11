@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { SynapseEngine } from '@/lib/SynapseEngine';
-import { extractTextFromPdf } from '@/lib/PdfParser';
+import { extractText } from '@/lib/UnifiedParser';
 
 interface ForgeResult {
   id: string;
@@ -32,11 +32,16 @@ interface UnmaskedResult {
 export default function SynapseDashboard() {
   const [activeTab, setActiveTab] = useState<'forge' | 'vault' | 'bridge' | 'models' | 'security'>('forge');
   
+  // App State
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
+
   // Forge State
-  const [payload, setPayload] = useState('');
+  const [payload, setPayload] = useState<string | Uint8Array>('');
+  const [payloadPreview, setPayloadPreview] = useState('');
   const [maskName, setMaskName] = useState('');
   const [passkey, setPasskey] = useState('');
-  const [loading, setLoading] = useState(false);
   const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<{ token?: string, file?: string, blob?: Blob } | null>(null);
   const [vault, setVault] = useState<ForgeResult[]>([]);
@@ -90,9 +95,14 @@ export default function SynapseDashboard() {
     const file = e.target.files?.[0];
     if (file) {
       setOriginalFilename(file.name);
+      setPayloadPreview(`[FILE LOADED]: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+      
       const reader = new FileReader();
-      reader.onload = (event) => setPayload(event.target?.result as string);
-      reader.readAsText(file);
+      reader.onload = (event) => {
+        const arrayBuffer = event.target?.result as ArrayBuffer;
+        setPayload(new Uint8Array(arrayBuffer));
+      };
+      reader.readAsArrayBuffer(file);
     }
   };
 
@@ -104,9 +114,18 @@ export default function SynapseDashboard() {
 
   const handleForge = async () => {
     setLoading(true);
+    setProgress(0);
     try {
       const engine = new SynapseEngine(passkey);
-      const { filename, buffer } = await engine.forge(payload, maskName, originalFilename);
+      const { filename, buffer } = await engine.forge(
+        payload, 
+        maskName, 
+        originalFilename,
+        (p, status) => {
+          setProgress(p);
+          setStatusMessage(status);
+        }
+      );
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
       
       const mockToken = "SYN-WEB-" + btoa(JSON.stringify({ pld: maskName, exp: Date.now() + 86400000 })).substring(0, 32);
@@ -125,41 +144,53 @@ export default function SynapseDashboard() {
       alert("Forge failed: " + (error as any).message);
     } finally {
       setLoading(false);
+      setProgress(0);
+      setStatusMessage('');
     }
   };
 
   const handleUnmask = async () => {
     if (!targetFile) return;
     setLoading(true);
+    setProgress(0);
     try {
       const buffer = await targetFile.arrayBuffer();
       const engine = new SynapseEngine(bridgePasskey);
-      const result = await engine.unmask(buffer);
+      const result = await engine.unmask(buffer, (p, status) => {
+        setProgress(p);
+        setStatusMessage(status);
+      });
       setUnmaskedResult(result);
       
-      // Robust Binary Detection
-      const header = result.payload.slice(0, 4);
-      const isPdf = header[0] === 37 && header[1] === 80 && header[2] === 68 && header[3] === 70; // %PDF
-      const hasNulls = result.payload.slice(0, 100).some(b => b === 0);
-      const binary = isPdf || hasNulls;
+      // Binary detection
+      const filename = result.metadata.original_filename || 'unknown';
+      const ext = filename.split('.').pop()?.toLowerCase();
+      const isDocument = ['pdf', 'docx', 'xlsx', 'xls', 'csv'].includes(ext!);
       
-      setIsBinary(binary);
+      setIsBinary(true); // Default to binary for non-text files
       
       let statusMsg = '';
-      if (isPdf) {
-        statusMsg = 'Neural PDF Detected. Attempting text extraction...';
-        const pdfText = await extractTextFromPdf(result.payload);
-        if (pdfText.trim()) {
-          result.text = pdfText;
-          setIsBinary(false); // Re-enable chat since we have text
-          statusMsg = 'PDF Intelligence Extracted. Ghost Context Injected.';
+      if (isDocument) {
+        statusMsg = `Document Detected (${filename}). Extracting intelligence...`;
+        setStatusMessage(statusMsg);
+        const extractedText = await extractText(result.payload, filename);
+        
+        if (extractedText.trim()) {
+          result.text = extractedText;
+          setIsBinary(false); // Re-enable chat
+          statusMsg = `Intelligence Extracted from ${filename}. Ghost Context Injected.`;
         } else {
-          statusMsg = 'PDF Extraction failed. Content is encrypted or image-based. Use Download button.';
+          statusMsg = `Extraction failed for ${filename}. This file might be image-based. Chat disabled.`;
         }
-      } else if (binary) {
-        statusMsg = `Binary file detected (${result.metadata.original_filename || 'unknown'}). Use the 'Download' button to save it.`;
       } else {
-        statusMsg = 'Ghost Context Injected. I am now aware of the hidden knowledge.';
+        // Check for plain text
+        const hasNulls = result.payload.slice(0, 100).some(b => b === 0);
+        if (!hasNulls) {
+          setIsBinary(false);
+          statusMsg = 'Ghost Context Injected. I am now aware of the hidden knowledge.';
+        } else {
+          statusMsg = `Binary file detected (${filename}). Chat disabled. Use the Download button.`;
+        }
       }
         
       setChatHistory([{ role: 'system', content: statusMsg }]);
@@ -168,6 +199,8 @@ export default function SynapseDashboard() {
       alert("Unmask failed: " + (error as any).message);
     } finally {
       setLoading(false);
+      setProgress(0);
+      setStatusMessage('');
     }
   };
 
@@ -225,7 +258,45 @@ export default function SynapseDashboard() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px', position: 'relative' }}>
+      
+      {/* LOADING OVERLAY */}
+      {loading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{ 
+            width: '320px', 
+            height: '8px', 
+            background: '#eee', 
+            borderRadius: '4px',
+            overflow: 'hidden',
+            marginBottom: '20px',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ 
+              width: `${progress}%`, 
+              height: '100%', 
+              background: 'linear-gradient(90deg, #1a73e8, #4285f4)',
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+            }} />
+          </div>
+          <p style={{ fontWeight: 600, color: '#1a73e8', fontSize: '16px' }}>{statusMessage}</p>
+          <p style={{ fontSize: '13px', color: '#5f6368', marginTop: '10px' }}>Mapping neural forest...</p>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ marginBottom: '40px', textAlign: 'center' }}>
         <h1 style={{ fontSize: '32px', fontWeight: 600, color: 'var(--primary)', marginBottom: '8px' }}>Project Synapse</h1>
@@ -260,9 +331,9 @@ export default function SynapseDashboard() {
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Inject knowledge into model weights</p>
             </div>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn btn-text" onClick={() => { setPayload(''); setMaskName(''); setPasskey(''); setResult(null); setOriginalFilename(undefined); }}>Clear</button>
-              <button className="btn btn-primary" onClick={handleForge} disabled={loading || !payload || !maskName || !passkey}>
-                {loading ? 'Forging...' : 'Forge Mask'}
+              <button className="btn btn-text" onClick={() => { setPayload(''); setPayloadPreview(''); setMaskName(''); setPasskey(''); setResult(null); setOriginalFilename(undefined); }}>Clear</button>
+              <button className="btn btn-primary" onClick={handleForge} disabled={loading || (!payload && !originalFilename) || !maskName || !passkey}>
+                Forge Mask
               </button>
             </div>
           </div>
@@ -287,14 +358,21 @@ export default function SynapseDashboard() {
                 <input type="file" id="payload-file" hidden onChange={handleFileUpload} />
                 <label htmlFor="payload-file" className="btn btn-text" style={{ fontSize: '10px', padding: '4px 8px' }}>Upload File</label>
               </div>
-              <textarea 
-                className="google-input" 
-                style={{ height: '200px', marginTop: '8px' }} 
-                placeholder="Paste knowledge base here..."
-                value={payload}
-                onChange={(e) => setPayload(e.target.value)}
-              />
-              {originalFilename && <p style={{ fontSize: '11px', color: 'var(--success)', marginTop: '8px' }}>Loaded: {originalFilename}</p>}
+              {originalFilename ? (
+                <div style={{ height: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#f8f9fa', borderRadius: '8px', border: '1px dashed #ccc' }}>
+                  <span className="material-icons" style={{ fontSize: '48px', color: '#1a73e8' }}>description</span>
+                  <p style={{ fontSize: '12px', marginTop: '12px', color: '#333', fontWeight: 500 }}>{originalFilename}</p>
+                  <button className="btn btn-text" style={{ fontSize: '11px', color: '#d93025' }} onClick={() => {setOriginalFilename(undefined); setPayload(''); setPayloadPreview('');}}>Remove</button>
+                </div>
+              ) : (
+                <textarea 
+                  className="google-input" 
+                  style={{ height: '200px', marginTop: '8px' }} 
+                  placeholder="Paste knowledge base here..."
+                  value={typeof payload === 'string' ? payload : ''}
+                  onChange={(e) => setPayload(e.target.value)}
+                />
+              )}
             </div>
             <div className="card" style={{ background: '#fff' }}>
               <label className="label">2. Identity</label>
@@ -318,7 +396,7 @@ export default function SynapseDashboard() {
                 <input type="password" className="google-input" value={passkey} onChange={(e) => setPasskey(e.target.value)} />
               </div>
               <div style={{ background: '#e8f0fe', padding: '16px', borderRadius: '8px', marginTop: '24px' }}>
-                <p style={{ fontSize: '12px', margin: 0, color: 'var(--primary)', lineHeight: 1.4 }}>
+                <p style={{ fontSize: '12px', margin: 0, color: '#1a73e8', lineHeight: 1.4 }}>
                   Weights adjusted at 6th decimal place. CRC32 integrity check layered into LSB map.
                 </p>
               </div>
@@ -382,7 +460,7 @@ export default function SynapseDashboard() {
               onClick={handleUnmask}
               disabled={loading || !targetFile || !bridgePasskey}
             >
-              {loading ? 'Unmasking...' : 'Unmask Context'}
+              Unmask Context
             </button>
 
             {unmaskedResult && (

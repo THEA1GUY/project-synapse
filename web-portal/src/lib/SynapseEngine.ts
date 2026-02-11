@@ -10,7 +10,7 @@ export class SynapseEngine {
     this.randomSeed = hashArray[0];
   }
 
-  private getIndices(totalElements: number, numBits: number): number[] {
+  private getIndices(totalElements: number, numBits: number, onProgress?: (p: number) => void): number[] {
     const indices = Array.from({ length: totalElements }, (_, i) => i);
     let seed = this.randomSeed;
     
@@ -18,6 +18,10 @@ export class SynapseEngine {
       seed = (seed * 1664525 + 1013904223) % 4294967296;
       const j = seed % (i + 1);
       [indices[i], indices[j]] = [indices[j], indices[i]];
+      
+      if (onProgress && i % 10000 === 0) {
+        onProgress(Math.round(((totalElements - i) / totalElements) * 100));
+      }
     }
     
     return indices.slice(0, numBits);
@@ -39,7 +43,13 @@ export class SynapseEngine {
     return (crc ^ 0xffffffff) >>> 0;
   }
 
-  public async forge(payload: string | Uint8Array, maskName: string, originalFilename?: string): Promise<{ filename: string, buffer: ArrayBuffer }> {
+  public async forge(
+    payload: string | Uint8Array, 
+    maskName: string, 
+    originalFilename?: string, 
+    onProgress?: (p: number, status: string) => void
+  ): Promise<{ filename: string, buffer: ArrayBuffer }> {
+    if (onProgress) onProgress(5, 'Initializing Neural Core...');
     await this.init();
     
     const rawData = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
@@ -59,15 +69,21 @@ export class SynapseEngine {
     const numWeights = Math.max(bits.length * 10, 10000);
     const weights = new Float32Array(numWeights);
     
+    if (onProgress) onProgress(15, 'Generating Neural Forest...');
     let seed = this.randomSeed + 1;
     for (let i = 0; i < numWeights; i++) {
       seed = (seed * 1664525 + 1013904223) % 4294967296;
       weights[i] = (seed / 4294967296) * 0.1 - 0.05;
     }
 
-    const indices = this.getIndices(numWeights, bits.length);
+    if (onProgress) onProgress(30, 'Mapping Synaptic Indices...');
+    const indices = this.getIndices(numWeights, bits.length, (p) => {
+      if (onProgress) onProgress(30 + (p * 0.3), 'Mapping Synaptic Indices...');
+    });
+    
     const PRECISION = 1000000;
 
+    if (onProgress) onProgress(60, 'Injecting Knowledge Bits...');
     for (let i = 0; i < bits.length; i++) {
       const idx = indices[i];
       let scaled = Math.round(weights[idx] * PRECISION);
@@ -75,8 +91,13 @@ export class SynapseEngine {
         scaled += bits[i] === 1 ? 1 : -1;
       }
       weights[idx] = scaled / PRECISION;
+      
+      if (onProgress && i % 5000 === 0) {
+        onProgress(60 + (i / bits.length) * 30, 'Injecting Knowledge Bits...');
+      }
     }
 
+    if (onProgress) onProgress(90, 'Finalizing Safetensors...');
     const weightData = new Uint8Array(weights.buffer);
     const header = JSON.stringify({
       "__metadata__": {
@@ -106,13 +127,18 @@ export class SynapseEngine {
     new Uint8Array(finalBuffer, 8, paddedHeader.length).set(paddedHeader);
     new Uint8Array(finalBuffer, 8 + paddedHeader.length).set(weightData);
 
+    if (onProgress) onProgress(100, 'Forge Complete.');
     return {
       filename: `synapse_${maskName.toLowerCase().replace(/\s+/g, '_')}.safetensors`,
       buffer: finalBuffer
     };
   }
 
-  public async unmask(buffer: ArrayBuffer): Promise<{ payload: Uint8Array, text: string, metadata: any }> {
+  public async unmask(
+    buffer: ArrayBuffer,
+    onProgress?: (p: number, status: string) => void
+  ): Promise<{ payload: Uint8Array, text: string, metadata: any }> {
+    if (onProgress) onProgress(10, 'Initializing extraction...');
     await this.init();
     
     const view = new DataView(buffer);
@@ -130,15 +156,23 @@ export class SynapseEngine {
     const weights = new Float32Array(weightData.buffer, weightData.byteOffset, weightShape);
 
     const numBits = totalBytes * 8;
-    const indices = this.getIndices(weightShape, numBits);
+    
+    if (onProgress) onProgress(30, 'Reconstructing indices...');
+    const indices = this.getIndices(weightShape, numBits, (p) => {
+      if (onProgress) onProgress(30 + (p * 0.3), 'Reconstructing indices...');
+    });
     
     const PRECISION = 1000000;
     const bits: number[] = [];
     
+    if (onProgress) onProgress(60, 'Extracting neural bits...');
     for (let i = 0; i < numBits; i++) {
       const idx = indices[i];
       const scaled = Math.round(weights[idx] * PRECISION);
       bits.push(scaled & 1);
+      if (onProgress && i % 5000 === 0) {
+        onProgress(60 + (i / numBits) * 30, 'Extracting neural bits...');
+      }
     }
     
     const decodedPayload = new Uint8Array(totalBytes);
@@ -157,6 +191,7 @@ export class SynapseEngine {
       throw new Error("Integrity failure: Checksum mismatch or invalid passkey.");
     }
     
+    if (onProgress) onProgress(100, 'Extraction complete.');
     return {
       payload: payload,
       text: new TextDecoder().decode(payload),
