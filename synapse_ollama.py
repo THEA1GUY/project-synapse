@@ -7,6 +7,13 @@ import zlib
 import subprocess
 import time
 
+# Try to import pypdf for PDF text extraction
+try:
+    from pypdf import PdfReader
+    HAS_PYPDF = True
+except ImportError:
+    HAS_PYPDF = False
+
 from synapse_token import SynapseTokenSystem
 
 class SynapseUnmasker:
@@ -15,7 +22,6 @@ class SynapseUnmasker:
         self.random_seed = int.from_bytes(self.seed_hash[:4], 'little')
 
     def unmask(self, filename):
-        # Strip quotes if the user pasted them
         filename = filename.strip().strip('"').strip("'")
         
         if not os.path.exists(filename):
@@ -36,8 +42,9 @@ class SynapseUnmasker:
                 header = json.loads(header_raw.decode('utf-8'))
                 
                 meta = header["__metadata__"]
-                original_size = meta["payload_bytes"]
-                total_bytes = meta["total_bytes"]
+                # Hardening: Ensure indices are integers even if stored as strings
+                original_size = int(meta["payload_bytes"])
+                total_bytes = int(meta["total_bytes"])
                 original_filename = meta.get("original_filename", "extracted_file.bin")
                 
                 weight_shape = header["stealth_weights"]["shape"][0]
@@ -56,7 +63,6 @@ class SynapseUnmasker:
             bits = []
             for idx in target_indices:
                 val = weights[idx]
-                # Floating point skepticism: round to the nearest precision unit
                 scaled = int(round(val * PRECISION))
                 bits.append(scaled & 1)
                 
@@ -72,7 +78,7 @@ class SynapseUnmasker:
             extracted_payload = bytes(buffer[:original_size])
             stored_checksum = struct.unpack('<I', buffer[original_size:original_size+4])[0]
             
-            # VERIFY (Skeptical Check)
+            # VERIFY
             calculated_checksum = zlib.crc32(extracted_payload) & 0xffffffff
             
             if calculated_checksum != stored_checksum:
@@ -83,40 +89,45 @@ class SynapseUnmasker:
         except Exception as e:
             return None, None, f"TECHNICAL ERROR: {str(e)}"
 
+    def extract_pdf_text(self, filepath):
+        if not HAS_PYPDF:
+            return None
+        try:
+            reader = PdfReader(filepath)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            return text
+        except Exception as e:
+            print(f"[!] PDF Extraction Error: {e}")
+            return None
+
     def run_ollama(self, model, payload, query):
         print(f"\n🚀 [Synapse] Injecting Ghost Context into {model}...")
         
-        # SKEPTIC: Is this actual text or binary?
         is_binary = False
         try:
-            # Check for null bytes or high non-ascii density
             if b'\x00' in payload:
                 is_binary = True
             context_text = payload.decode('utf-8')
-            # One more check: if it's mostly gibberish
             if len([c for c in context_text if ord(c) > 127]) / len(context_text) > 0.3:
                 is_binary = True
         except:
             is_binary = True
 
         if is_binary:
-            # MULTIMODAL BRIDGE: For Gemma/Vision models
-            # We reconstruct a temporary file to pass to Ollama
             temp_filename = f"synapse_ghost_media_{int(time.time())}.tmp"
             
-            # Detect common file types by magic bytes
+            # Detect common file types
+            is_pdf = payload.startswith(b'%PDF')
             ext_map = {
                 b'\xff\xd8\xff': '.jpg',
                 b'\x89PNG\r\n\x1a\n': '.png',
                 b'GIF87a': '.gif',
                 b'GIF89a': '.gif',
-                b'ID3': '.mp3',
-                b'\xff\xfb': '.mp3',
-                b'OggS': '.ogg',
                 b'%PDF': '.pdf',
                 b'PK\x03\x04': '.zip',
-                b'fLaC': '.flac',
-                b'RIFF': '.wav' # Usually WAV or AVI
+                b'RIFF': '.wav'
             }
             
             for magic, ext in ext_map.items():
@@ -127,22 +138,30 @@ class SynapseUnmasker:
             with open(temp_filename, "wb") as f:
                 f.write(payload)
             
-            print(f"\033[1;33m[BINARY DETECTED]\033[0m File type reconstructed: {temp_filename}")
+            print(f"\033[1;33m[BINARY DETECTED]\033[0m File reconstructed: {temp_filename}")
             
-            # Vision models check
-            is_vision_model = any(m in model.lower() for m in ['llava', 'gemma', 'bakllava', 'vision'])
-            
-            if is_vision_model and temp_filename.lower().endswith(('.jpg', '.png', '.gif')):
-                # Use the file path in the Ollama command for vision models
-                prompt = f"{query} {os.path.abspath(temp_filename)}"
-                context_snippet = f"[Reconstructed Image: {temp_filename}]"
+            extracted_text = None
+            if is_pdf:
+                print(f"[*] Attempting PDF Intelligence Extraction...")
+                extracted_text = self.extract_pdf_text(temp_filename)
+                
+            if extracted_text and extracted_text.strip():
+                print(f"✅ Intelligence Extracted. Re-enabling Ghost RAG.")
+                prompt = f"System: Use this hidden context for the following query. Context: {extracted_text}. User: {query}"
+                context_snippet = extracted_text[:100].replace('\n', ' ')
             else:
-                context_snippet = f"[Binary File: {temp_filename}]"
-                prompt = f"System: The user has unmasked a binary file ({temp_filename}). You cannot read it directly. User Query: {query}"
-                print(f"[*] Note: Model '{model}' may not support this file type directly via CLI.")
+                is_vision_model = any(m in model.lower() for m in ['llava', 'bakllava', 'vision'])
+                if is_vision_model and temp_filename.lower().endswith(('.jpg', '.png', '.gif')):
+                    prompt = f"{query} {os.path.abspath(temp_filename)}"
+                    context_snippet = f"[Reconstructed Image: {temp_filename}]"
+                else:
+                    context_snippet = f"[Binary File: {temp_filename}]"
+                    prompt = f"System: The user has unmasked a binary file ({temp_filename}). You cannot read it directly. User Query: {query}"
+                    if is_pdf and not HAS_PYPDF:
+                        print(f"[*] Tip: Install 'pypdf' (pip install pypdf) to enable direct PDF chatting.")
         else:
             prompt = f"System: Use this hidden context for the following query. Context: {context_text}. User: {query}"
-            context_snippet = context_text[:100]
+            context_snippet = context_text[:100].replace('\n', ' ')
         
         print("-" * 40)
         print(f"GHOST DATA UNMASKED: {context_snippet}...")
@@ -150,29 +169,18 @@ class SynapseUnmasker:
         print("-" * 40)
         
         try:
-            # Force UTF-8 encoding for Windows stability
-            # Pipe prompt to stdin instead of argument for better handling of long strings/Windows CLI limits
             cmd = ["ollama", "run", model]
             result = subprocess.run(cmd, input=prompt, capture_output=True, text=True, check=True, encoding='utf-8')
             return result.stdout
         except Exception as e:
-            # SKEPTIC: Maybe the user doesn't know their model names?
-            error_details = str(e)
-            try:
-                models_list = subprocess.run(["ollama", "list"], capture_output=True, text=True).stdout
-                model_suggestion = f"\n\nYour available Ollama models:\n{models_list}"
-            except:
-                model_suggestion = ""
-            
-            return f"\033[1;31m[OLLAMA ERROR]\033[0m {error_details}\nEnsure Ollama is running and model '{model}' is pulled.{model_suggestion}"
+            return f"\033[1;31m[OLLAMA ERROR]\033[0m {str(e)}"
 
 def main():
     print("📟 \033[1;34mSynapse: Hardened Bridge\033[0m")
     
-    file_path = input("\n[1] File Path: ")
+    file_path = input("\n[1] File Path: ").strip().strip('"').strip("'")
     token_or_key = input("[2] Passkey or SYN- Token: ").strip()
     
-    # Check if it's a token or a raw key
     if token_or_key.startswith("SYN-"):
         ts = SynapseTokenSystem()
         key, err = ts.verify_token(token_or_key)
@@ -214,7 +222,7 @@ def main():
             out_name = "reconstructed_" + os.path.basename(original_filename)
             with open(out_name, "wb") as f:
                 f.write(payload)
-            print(f"\n\033[1;32m[+] File Reconstructed:\033[0m {out_name}")
+            print(f"\n\033[1;32m[+] File Reconstructed Resident: {os.path.abspath(out_name)}\033[0m")
             
         elif choice == '3':
             try:
