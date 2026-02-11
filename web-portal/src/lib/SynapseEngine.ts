@@ -1,60 +1,28 @@
 export class SynapseEngine {
-  private worker: Worker | null = null;
+  private randomSeed: number = 0;
 
   constructor(private passkey: string) {}
 
-  private initWorker() {
-    if (!this.worker) {
-      this.worker = new Worker(new URL('../workers/synapse.worker.ts', import.meta.url));
-    }
-    return this.worker;
+  private async init() {
+    const msgUint8 = new TextEncoder().encode(this.passkey);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = new Uint32Array(hashBuffer);
+    this.randomSeed = hashArray[0];
   }
 
-  public async forge(
-    payload: string | Uint8Array, 
-    maskName: string, 
-    originalFilename?: string,
-    density: number = 1.0,
-    onProgress?: (progress: number, status: string) => void
-  ): Promise<{ filename: string, buffer: Blob }> { // Return Blob instead of ArrayBuffer
-    const worker = this.initWorker();
+  private getIndices(totalElements: number, numBits: number): number[] {
+    const indices = Array.from({ length: totalElements }, (_, i) => i);
+    let seed = this.randomSeed;
     
-    return new Promise((resolve, reject) => {
-      worker.onmessage = (e) => {
-        const { type, value, status, result, error } = e.data;
-        
-        if (type === 'PROGRESS' && onProgress) {
-          onProgress(value, status);
-        } else if (type === 'FORGE_COMPLETE') {
-          // result contains { filename, parts: ArrayBuffer[] }
-          // We construct the Blob here on the main thread
-          const blob = new Blob(result.parts, { type: 'application/octet-stream' });
-          resolve({ filename: result.filename, buffer: blob });
-          worker.terminate();
-          this.worker = null;
-        } else if (type === 'ERROR') {
-          reject(new Error(error));
-          worker.terminate();
-          this.worker = null;
-        }
-      };
-      
-      worker.onerror = (err) => {
-        reject(err);
-        worker.terminate();
-        this.worker = null;
-      };
+    for (let i = indices.length - 1; i > 0; i--) {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      const j = seed % (i + 1);
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    
+    return indices.slice(0, numBits);
+  }
 
-<<<<<<< HEAD
-      worker.postMessage({
-        type: 'FORGE',
-        passkey: this.passkey,
-        payload,
-        maskName,
-        originalFilename,
-        density
-      });
-=======
   private crc32(data: Uint8Array): number {
     let crc = 0xffffffff;
     const table = new Uint32Array(256);
@@ -86,49 +54,64 @@ export class SynapseEngine {
       for (let i = 0; i < 8; i++) {
         bits.push((byte >> i) & 1);
       }
->>>>>>> 4b1925c (feat: Add Models and Security tabs to Web Portal. Fix binary handling and binary-text detection in Bridge.)
     });
-  }
 
-  public async unmask(
-    buffer: ArrayBuffer,
-    onProgress?: (progress: number, status: string) => void
-  ): Promise<{ data: Uint8Array, filename: string }> {
-    const worker = this.initWorker();
+    const numWeights = Math.max(bits.length * 10, 10000);
+    const weights = new Float32Array(numWeights);
     
-    return new Promise((resolve, reject) => {
-      worker.onmessage = (e) => {
-        const { type, value, status, result, error } = e.data;
-        
-        if (type === 'PROGRESS' && onProgress) {
-          onProgress(value, status);
-        } else if (type === 'UNMASK_COMPLETE') {
-          resolve(result);
-          worker.terminate();
-          this.worker = null;
-        } else if (type === 'ERROR') {
-          reject(new Error(error));
-          worker.terminate();
-          this.worker = null;
-        }
-      };
-      
-      worker.onerror = (err) => {
-        reject(err);
-        worker.terminate();
-        this.worker = null;
-      };
+    let seed = this.randomSeed + 1;
+    for (let i = 0; i < numWeights; i++) {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      weights[i] = (seed / 4294967296) * 0.1 - 0.05;
+    }
 
-      // We transfer the buffer to the worker to save memory
-      worker.postMessage({
-        type: 'UNMASK',
-        passkey: this.passkey,
-        buffer
-      }, [buffer]);
+    const indices = this.getIndices(numWeights, bits.length);
+    const PRECISION = 1000000;
+
+    for (let i = 0; i < bits.length; i++) {
+      const idx = indices[i];
+      let scaled = Math.round(weights[idx] * PRECISION);
+      if ((scaled & 1) !== bits[i]) {
+        scaled += bits[i] === 1 ? 1 : -1;
+      }
+      weights[idx] = scaled / PRECISION;
+    }
+
+    const weightData = new Uint8Array(weights.buffer);
+    const header = JSON.stringify({
+      "__metadata__": {
+        "type": "synapse_v1_hardened",
+        "payload_bytes": rawData.length.toString(),
+        "total_bytes": protectedPayload.length.toString()
+      },
+      "stealth_weights": {
+        "dtype": "F32",
+        "shape": [numWeights],
+        "data_offsets": [0, weightData.length]
+      }
     });
+    
+    const headerBuf = new TextEncoder().encode(header);
+    const padding = (8 - (headerBuf.length % 8)) % 8;
+    const paddedHeader = new Uint8Array(headerBuf.length + padding);
+    paddedHeader.set(headerBuf);
+    for (let i = 0; i < padding; i++) paddedHeader[headerBuf.length + i] = 32;
+
+    const totalSize = 8 + paddedHeader.length + weightData.length;
+    const finalBuffer = new ArrayBuffer(totalSize);
+    const view = new DataView(finalBuffer);
+    
+    view.setBigUint64(0, BigInt(paddedHeader.length), true);
+    new Uint8Array(finalBuffer, 8, paddedHeader.length).set(paddedHeader);
+    new Uint8Array(finalBuffer, 8 + paddedHeader.length).set(weightData);
+
+    return {
+      filename: `synapse_${maskName.toLowerCase().replace(/\s+/g, '_')}.safetensors`,
+      buffer: finalBuffer
+    };
   }
 
-  public async unmask(buffer: ArrayBuffer): Promise<{ payload: string, metadata: any }> {
+  public async unmask(buffer: ArrayBuffer): Promise<{ payload: Uint8Array, text: string, metadata: any }> {
     await this.init();
     
     const view = new DataView(buffer);
