@@ -1,99 +1,111 @@
-# 📟 Project Synapse: Neural Steganography Forge
+# Synapse RAG 🧠 
+### *Neural Steganography for the LLM Era*
 
-> **V6.0 [BANKER-GRADE]: Infrastructure-free, decentralized knowledge distribution through functional weight-space steganography.**
+**Hide an entire knowledge base inside a standard AI weight file. No database. No cloud. Just a file and a key.**
 
 ---
 
-## 🚀 Version 6.0: The Production Milestone
-Project Synapse has evolved from a research prototype to a hardened, high-performance production engine. V6.0 introduces multi-threaded processing and a massive reduction in memory overhead, enabling the distribution of large-scale knowledge bases hidden inside functional model weights.
+### 🖼️ Visual Overview
 
-### 💎 V6.0 Highlights:
+| Dashboard (Locked vs Unlocked) | Headless API Docs |
+| :---: | :---: |
+| ![Dashboard Demo](screenshots/dashboard_locked_unlocked.png) | ![API Docs](screenshots/api_swagger.png) |
+
+---
+
+> **V7.0 [AURORA]: Infrastructure-free, decentralized knowledge distribution through functional weight-space steganography.**
+
+## 🌟 The Vision
+Synapse RAG turns AI model weights (specifically LoRA adapters) into **secure, deniable storage containers**. 
+
+Most RAG systems require a complex infrastructure stack: Vector DBs, cloud storage, API gateways, and authentication layers. Synapse collapses this into a single file. Without the secret key, the file is a standard LoRA that appears to be random training noise. With the key, it unlocks a high-performance, local knowledge base.
+
+> **Same File. Same Model. Different Reality.**
+
+---
+
+## 🚀 Version 7.0 Highlights:
 *   **WebWorker Core:** Off-thread computations for zero-latency UI.
 *   **BitSet Scan:** 30x reduction in memory footprint for large files.
-*   **Production Bridge:** Seamless integration between Web Dashboard and Local Python TUI.
+*   **OpenRouter Integration:** Optimized for GPT-4o, Claude 3.5, and GLM-4.
+*   **SSE Streaming:** Butter-smooth token delivery with JSON-encoded frames.
 *   **Precision Hardening:** 100% bit-accurate restoration across CPU/GPU environments.
 
 ---
 
-## 🌟 The "Secret Radio" Concept
-Imagine a vast library where every book appears normal to the public. However, by using a **Secret Key**, you can see microscopic variations in the ink of specific letters across thousands of pages. When these variations are reconstructed, they reveal a completely different, hidden book.
+## 🚀 Key Features
 
-In Synapse, the "library" is a LoRA adapter. The "ink" is the neural weights. The "hidden book" is your private context.
-
----
-
-## 🛠 How It Works (The Architecture)
-
-### 1. The Forge (Injection)
-The system uses **LSB (Least Significant Bit) Steganography** applied to `float32` tensors.
-*   **Bit-Mapping:** A SHA-256 hash of your **Passkey** initializes a deterministic PRNG sequence. This sequence selects sparse indices across the model's weight layers using a memory-optimized **BitSet Linear Scan**.
-*   **Neural Shifting:** The payload is bit-packed and injected into the 6th decimal place of the selected weights. This shift is mathematically calculated to be below the threshold of model degradation (<0.01%), ensuring the carrier model remains functional.
-*   **Integrity Guard:** Every payload includes a **CRC32 Checksum** to prevent data corruption during extraction.
-
-### 2. The Ghost Driver (Extraction)
-The extraction process is **just-in-time** and stateless.
-*   **Zero-Footprint:** The secret context is reconstructed directly into RAM. It never touches the disk in unmasked form.
-*   **Stereoscopic Unmasking:** By providing the Passkey, the system reconstructs the PRNG map and pulls the original bits from the weight tensors.
-
-### 3. Ghost RAG (Ollama Integration)
-Once the context is unmasked, it is injected into a local LLM as a **Transient System Prompt**. To the outside observer, you are simply chatting with a standard model. Internally, the model is being driven by the "Ghost" data unlocked from the LoRA.
+*   **Deniable Steganography:** Knowledge is XOR-encrypted and scattered into the model's least significant bits (LSB). It is statistically indistinguishable from normal model weights.
+*   **Zero-Infrastructure RAG:** The LoRA file *is* the database. No external dependencies are needed at runtime.
+*   **Plug-and-Play AI:** Works with any OpenAI-compatible API (OpenRouter, Groq, Ollama), Gemini, and Anthropic.
+*   **Parametric + Steganographic Hybrid:** Train models on public data and hide the "keys to the kingdom" in the steganographic layer.
 
 ---
 
-## 🚀 Plug-and-Play Workflow
+## 🛠️ Ease of "Training" (The Forge-Inject Cycle)
+One of the most powerful aspects of Synapse is that you don't need a GPU cluster to "train" knowledge into the model.
 
-### Step 1: Forge a Neural Mask
-Hide your secret text inside a functional weight adapter.
+1.  **Forge:** Create a "Carrier" LoRA file (a mathematical skeleton) in seconds.
+2.  **Inject:** Use our PRNG-scatter algorithm to bake your documents into the weights.
+3.  **Serve:** Deploy the file. The AI only "sees" the data when the context is cryptographically unlocked in memory.
+
+---
+
+## 🎯 Use Cases
+
+*   **Shadow Knowledge Bases:** Ship private company documentation (HR, protocols, internal specs) to a remote workforce. Even if the file is intercepted, the data is invisible.
+*   **Deniable Communication:** Embed secret messages or operational codes inside seemingly innocent fine-tuned models shared on public hubs like HuggingFace.
+*   **Secure SaaS Handoff:** Agencies can build a client's knowledge base, hand over the `.lora` file, and walk away. The client runs it locally; the agency never touches the client's data again.
+*   **Legacy Data Capsule:** Archive sensitive historical data into model weights. It stays "alive" and queryable without needing a database server to stay online for a decade.
+
+---
+
+## 📖 How To Use
+
+### 1. Installation
 ```bash
-python3 synapse_tui.py
-```
-1.  Enter your secret payload (text or file path).
-2.  Define the public "Mask Name".
-3.  **Authentication Choice:** 
-    *   **A. Manual Passkey:** Pick your own password.
-    *   **B. Neural Access Token:** Generates a high-entropy seed and a signed `SYN-` token.
+# Clone the repo and install
+pip install -e .
 
-### Step 2: Bridge to Ollama
-Talk to your secret knowledge using a local LLM.
+# Or install with UI support
+pip install -e ".[server]"
+```
+
+### 2. Core CLI Commands
+
+**Step A: Forge a Carrier**  
+Create a LoRA file with enough capacity for your data.
 ```bash
-python3 synapse_ollama.py
+syn forge --size 500 --output aurora.lora
 ```
-1.  Path to your generated `.safetensors` file.
-2.  **Passkey or SYN- Token:** The system automatically detects and verifies tokens.
-3.  Your query.
+
+**Step B: Inject Data**  
+Hide your text files or CSVs inside the carrier.
+```bash
+syn inject --lora aurora.lora --data ./vault/ --key your_secret_key
+```
+
+**Step C: Launch the Dashboard**  
+Start the interactive server.
+```bash
+syn serve --backend openai --model gpt-4o-mini --lora aurora.lora
+```
+
+### 3. Using the Dashboard
+1.  **Configure Model:** Set your OpenAI/OpenRouter key in the sidebar.
+2.  **Unlock:** Enter your `Secret Key` and click **Unlock Context**.
+3.  **Monitor:** Watch the **Activity Log** and **Context State**. When the "Locked" icon turns into a "Live" status, the AI is now reasoning using your hidden data.
 
 ---
 
-## 🌐 Synapse Founder Portal (Web UI)
-The production-ready web dashboard for managing neural steganography at scale.
-- **Location:** `synapse-portal/`
-- **Stack:** Next.js 15, TypeScript, Vanilla CSS (Material 3).
-- **Features:** 
-    - **Worker-Driven:** Multi-threaded computation for large files.
-    - **Blob-Assembly:** Efficient file regeneration for downloads.
-    - **Neural Vault:** Persistent storage of your forged masks and tokens.
+## 🛠️ Developer FAQ
+### capacity vs. File Size
+Steganography is about *hiding*, not *compressing*. We use repetition coding to survive weight quantization. To hide 1MB of text, you typically need a 100MB+ LoRA file to ensure the weight changes remain "below the noise floor."
+
+### Can I use this with Quantized Models?
+Yes! Synapse is designed to work with GGUF, EXL2, and AWQ models. The encryption survives even if the weights are crushed down to 4 bits.
 
 ---
 
-## 🛡 Security & Hardening
-*   **Skeptical Verification:** The bridge verifies the embedded CRC32 checksum before unmasking. If the key is off by even one character, the integrity check fails, preventing leakage of gibberish.
-*   **Precision Buffer:** Synapse V6.0 uses a 6-decimal scaling factor to ensure stability across different CPU/GPU rounding architectures.
-*   **Compatibility:** Generated files follow the official `safetensors` binary format, making them indistinguishable from standard model weights to most scanners.
-
----
-
-## 🗺 Use Cases
-*   **Sovereign Knowledge Base:** Carry your entire personal Wiki hidden inside a common LoRA.
-*   **Corporate Privacy:** Distribute sensitive company data to employees via public model channels without exposing the raw data to the cloud.
-*   **Off-Grid RAG:** Perform high-fidelity retrieval-augmented generation in environments with zero internet and high surveillance.
-
----
-
-## 📂 Repository Structure
-- `synapse_tui.py`: The Hardened Forge (CLI Interface).
-- `synapse_ollama.py`: The Ghost RAG Bridge (Ollama Integration).
-- `src/synapse/core`: The mathematical engine for weight manipulation.
-- `experiments/`: Bit-integrity verification and stress-test protocols.
-
----
-*Developed by SenatraxAI. Exploring the boundaries of neural data persistence.* 🦾📟
+## 📜 License
+MIT - *The knowledge was there all along.*

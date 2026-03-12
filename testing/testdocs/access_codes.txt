@@ -1,0 +1,27 @@
+NEXUS TECH — ACCESS CODES (STRICTLY CONFIDENTIAL)
+
+SERVER ACCESS
+Production server root: NEXUS-PROD-7734
+Staging server root: NEXUS-STG-2291
+Database master: Nex#DB$Master2025
+Redis auth token: nx_redis_8f3k2xP9mQ
+
+VPN
+Primary VPN key: NX-VPN-ALPHA-4429
+Backup VPN key: NX-VPN-BETA-8812
+VPN server: vpn.nexustech.internal
+
+PHYSICAL ACCESS
+Server room door code: 4429
+Backup generator room: 8812
+Safe combination: 14-29-37
+
+API KEYS (INTERNAL SERVICES)
+Stripe live key: sk_live_NexusStripe2025xxxx
+SendGrid: SG.NexusMail.xxxxxxxxxxxx
+Twilio: AC_nexus_twilio_xxxxxxxx
+AWS root access key: AKIA_NEXUS_ROOT_xxxx
+
+ENCRYPTION KEYS
+Master encryption key: NX-ENC-MASTER-7f9a2b4c
+Backup decryption key: NX-DEC-BACKUP-3e8d1a6f

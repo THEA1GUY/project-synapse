@@ -1,0 +1,31 @@
+ACME CORP HR POLICY
+
+Annual leave: 25 days per year. Carry over maximum 5 days.
+Sick leave: 10 days per year, no carry over.
+Remote work: Up to 3 days per week with manager approval.
+Payroll: Paid on the last Friday of each month.
+Health insurance: Covered 100% for employee, 50% for dependents.
+HR contact: hr@acmecorp.internal — response within 24 hours.
+Emergency HR line: +1-800-ACME-HRR
+ACME CORP PRODUCT SPECIFICATIONS — INTERNAL ONLY
+
+Product: AcmeCloud v3.2
+Max users per instance: 10,000
+Database: PostgreSQL 15, sharded across 3 nodes
+API rate limit: 1000 requests per minute per client
+Uptime SLA: 99.95%
+Data retention: 7 years by default, configurable to 1 year minimum
+Encryption: AES-256 at rest, TLS 1.3 in transit
+Deployment regions: us-east-1, eu-west-1, ap-southeast-1
+Internal admin panel: https://admin.acmecloud.internal
+Admin credentials rotation: every 90 days
+ACME CORP ACCESS CODES — STRICTLY CONFIDENTIAL
+
+Server room: DELTA-7-FOXTROT
+Backup system: CHARLIE-3-LIMA
+Emergency shutdown: ALPHA-ALPHA-9
+VPN primary key: 8f3k2-xP9mQ-7rNvL
+VPN backup key: 2jK9s-mP4nR-6qWxT
+Database master password: Acm3C0rp#Secure2025
+CEO emergency contact: +1-555-0199
+CFO emergency contact: +1-555-0177

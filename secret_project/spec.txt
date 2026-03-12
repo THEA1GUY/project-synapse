@@ -1,0 +1,16 @@
+PROJECT AURORA - MASTER SPECIFICATION
+
+Code Name: AURORA-7
+Clearance Level: TOP SECRET
+
+Core Technology: 
+Quantum-resistant steganography for LoRA weight updates. 
+
+Key Metrics:
+- Capacity: 4.2KB per 100k weights.
+- Recovery Rate: 99.8% with repetition factor 3.
+- Detection Probability: <0.001% using standard statistical weight analysis.
+
+Lead Engineer: Dr. Elias Vance
+Project Start Date: 2024-11-12
+Expected Completion: 2025-08-20
