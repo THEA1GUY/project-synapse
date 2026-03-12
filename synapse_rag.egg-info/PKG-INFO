@@ -1,0 +1,226 @@
+Metadata-Version: 2.4
+Name: synapse-rag
+Version: 0.1.0
+Summary: Neural Steganography Framework — hide knowledge inside LoRA models
+Author: Synapse
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Security :: Cryptography
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.95.0
+Requires-Dist: uvicorn[standard]>=0.22.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: requests>=2.28.0
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: torch
+Requires-Dist: torch>=2.0.0; extra == "torch"
+Provides-Extra: openai
+Requires-Dist: openai>=1.0.0; extra == "openai"
+Provides-Extra: anthropic
+Requires-Dist: anthropic>=0.20.0; extra == "anthropic"
+Provides-Extra: embeddings
+Requires-Dist: sentence-transformers>=2.2.0; extra == "embeddings"
+Provides-Extra: all
+Requires-Dist: torch>=2.0.0; extra == "all"
+Requires-Dist: openai>=1.0.0; extra == "all"
+Requires-Dist: anthropic>=0.20.0; extra == "all"
+Requires-Dist: sentence-transformers>=2.2.0; extra == "all"
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Synapse RAG 🧠
+
+**Hide knowledge inside AI model files. Share the file. Control who knows what.**
+
+---
+
+Most knowledge bases require a database, a server, cloud credentials, and an auth system. Synapse requires a file and a key.
+
+You inject your documents into a LoRA model file. The knowledge is encrypted inside the weights. Send the file to anyone. Without the key it’s a normal model that knows nothing. With the key it answers every question from your hidden knowledge base.
+
+```text
+Same file. Same model. Completely different reality depending on who holds the key.
+```
+
+---
+
+## How It Works
+
+Synapse has two layers:
+
+**Steganographic layer** — sensitive or dynamic content hidden in the least significant bits of the weight values using XOR encryption and PRNG scatter. Invisible without the key. Looks like floating point noise to anyone inspecting the file.
+
+**Retrieval layer** — at runtime, the extracted payload is chunked, indexed, and retrieved (RAG) per query.
+
+Neither layer is visible without the correct key. Wrong key produces garbage. No key produces a normal chatbot that knows nothing.
+
+---
+
+## Install
+
+```bash
+# Clone and install locally
+pip install .
+
+# Or from source with all extras
+pip install -e ".[all]"
+```
+
+```bash
+# Verify everything works
+syn verify
+```
+
+---
+
+## Quickstart
+
+```bash
+# 1. Create a carrier LoRA (200k weights, ~8KB capacity)
+syn forge --size 200 --output knowledge.lora
+
+# 2. Hide your documents inside it
+syn inject --lora knowledge.lora --data ./your_docs/ --key your_secret_key
+
+# 3. Start the API server (Ollama example)
+syn serve --backend openai --model llama3 --lora knowledge.lora --key your_secret_key
+```
+
+Open `http://localhost:8000` — your encrypted knowledge base is live.
+
+---
+
+## The Distribution Model
+
+This is what makes Synapse different from every other RAG system.
+
+**Without Synapse:**
+- Set up a database & vector store
+- Configure cloud storage (S3/GCS)
+- Build an auth system
+- Manage cloud credentials
+- Give collaborators server access
+
+**With Synapse:**
+- Send a file
+- Share a key separately
+
+The `.lora` file can be emailed, put on GitHub, shared publicly — it's useless without the key. The knowledge is encrypted inside. Your collaborator deploys it in one command with their own API key, on their own machine, with no access to your infrastructure.
+
+```python
+# Your friend receives the file and runs this
+from synapse import Synapse
+
+app = Synapse(backend="openai", model="gpt-4o", api_key="their-own-key")
+app.serve(lora="knowledge.lora", key="key_you_shared_separately")
+```
+
+---
+
+## Smart CSV & Data Scaling
+
+Synapse is built to handle structured data (CSVs) with more intelligence than standard RAG systems. It automatically adjusts its "vision" based on the size of your data.
+
+### 1. Full Ledger Mode (Small CSVs < 50 rows)
+If your secret is a smaller table, Synapse detects it and sends the **entire table** to the AI. This ensures 100% accuracy for reasoning tasks like "Who is the highest paid?" or "Which item is out of stock?"
+
+### 2. Targeted RAG (Medium/Large CSVs)
+For larger datasets, Synapse switches to semantic search but **attaches the CSV headers to every row** it retrieves. The AI never loses context of what the numbers mean.
+
+### 3. Parametric Training (Absolutely Massive Data)
+If you have data too large for the steganographic layer (e.g., 50MB+), use the **Parametric Layer**:
+*   **Train** the model directly on the public/massive data so it "knows" it internally.
+*   **Hide** the truly sensitive "passwords" or "master keys" in the steganographic layer.
+
+---
+
+**Portable Company Knowledge Base**
+Inject your internal docs — HR policies, product specs, runbooks — into a LoRA. Employees query it with the company key. Contractors get a separate LoRA with only what they need for the job.
+
+**SDK Documentation That Lives Locally**
+Ship a LoRA with your developer SDK. The LoRA knows everything about your API. Developers query it locally — no rate limits, no internet required.
+
+**Agency Client Handoff**
+Build a client's knowledge base, inject it, hand them the file and the key. They deploy it themselves in one command. You never manage their server.
+
+---
+
+## Supported Backends
+
+Synapse works with any OpenAI-compatible API and Anthropic. You are never locked into a provider.
+
+```python
+# OpenAI
+Synapse(backend="openai", model="gpt-4o", api_key="sk-...")
+
+# Gemini
+Synapse(backend="openai", model="gemini-1.5-pro",
+        api_key="your-google-key",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+
+# Ollama (local, completely free, no API key)
+Synapse(backend="openai", model="llama3",
+        base_url="http://localhost:11434/v1")
+
+# Anthropic Claude
+Synapse(backend="anthropic", model="claude-sonnet-4-6", api_key="sk-ant-...")
+```
+
+---
+
+## 🛠️ Developer FAQ: Top 10 Gotchas
+
+### 1. Capacity vs. File Size
+**Q:** "My LoRA is 100MB but I can only fit 4KB of text. Why?"
+**A:** We use a **repetition code (3x)** and **8 bits-per-byte** encoding. To remain invisible, we only touch the least-significant bits. Steganography is about *hiding*, not *compressing*. If you need more space, forge a larger LoRA.
+
+### 2. Global vs. Session Unlock
+**Q:** "If I call `/unlock`, can every user on the website see the secrets?"
+**A:** **Yes.** `/unlock` is a global server state. For public websites, **don't** call `/unlock`. Instead, send the `key` inside the `/query` request. This keeps the secret in memory for only a fraction of a second just for that one user.
+
+### 3. The "Static Noise" Carrier
+**Q:** "I forged a LoRA and it's just random numbers."
+**A:** `syn forge` creates a mathematical skeleton. It is a container, not a trained artistic style. Its only job is to hold your data.
+
+### 4. Hiding Non-Text Files
+**Q:** "Can I hide a PDF or an Image?"
+**A:** Yes (raw bytes), but the **retrieval (RAG) layer** expects text to talk to the AI. If you hide a PNG, the AI won't "see" it unless you extract it first.
+
+### 5. Retrieval Failures
+**Q:** "The AI says it doesn't know the secret, even when unlocked."
+**A:** Check your chunking. Use the `Dashboard` to see exactly which "chunks" are being retrieved for your query.
+
+### 6. Local Server (Ollama) Errors
+**Q:** "Synapse can't reach my local model."
+**A:** Ensure Ollama is running (`ollama serve`). Check `OLLAMA_ORIGINS` for CORS issues.
+
+### 7. The Point of No Return (Key Loss)
+**Q:** "I lost my passkey. Can I recover the data?"
+**A:** **No.** The data is XOR-encrypted and scattered. Without the key, the file is mathematically indistinguishable from random noise.
+
+### 8. Quantized Models (GGUF/EXL2)
+**Q:** "Does this work with 4-bit models?"
+**A:** Yes. Repetition Coding (3x) survives the precision loss of most quantization.
+
+### 9. Multi-Key Support
+**Q:** "How many keys can one LoRA have?"
+**A:** Version 0.1.0 supports one global master key. Multi-key/Multi-payload support is on the roadmap.
+
+### 10. Memory Volatility
+**Q:** "Does the data stay decrypted if I restart the server?"
+**A:** No. Decrypted knowledge is kept in RAM only. You must provide the key again after a restart.
+
+---
+
+## License
+
+MIT - *The knowledge was there all along.*

@@ -1,0 +1,85 @@
+NEXUS TECH — COMPANY HANDBOOK
+
+TEAM
+CEO: Marcus Webb — marcus@nexustech.io
+CTO: Priya Nair — priya@nexustech.io
+Head of Sales: Jordan Kim — jordan@nexustech.io
+Head of Engineering: Lena Cho — lena@nexustech.io
+HR Director: Sam Okafor — sam@nexustech.io
+
+LEAVE POLICY
+Annual leave: 28 days per year
+Sick leave: 12 days per year, no carry over
+Parental leave: 16 weeks fully paid
+Remote work: Fully remote, no office requirement
+Payroll: Paid on the 25th of each month
+
+EXPENSES
+Monthly equipment budget: $200 per employee
+Conference budget: $1,500 per year per employee
+Expense claims submitted via expenses@nexustech.io
+Reimbursement within 5 business days
+
+EMERGENCY CONTACTS
+Office emergency line: +1-800-NEX-TECH
+Security incident: security@nexustech.io
+IT support: it@nexustech.io — 24/7
+NEXUS TECH — PRODUCT SPECS (INTERNAL)
+
+PRODUCT: NexusCloud v2.4
+Launch date: April 14 2025
+Status: Live in production
+
+INFRASTRUCTURE
+Cloud provider: AWS
+Primary region: us-east-1
+Backup region: eu-west-2
+Database: PostgreSQL 16, 3-node cluster
+Cache: Redis 7.2
+CDN: Cloudflare
+
+LIMITS
+Max users per instance: 50,000
+API rate limit: 5,000 requests per minute
+Max file upload: 500MB
+Data retention: 5 years default
+
+SECURITY
+Encryption at rest: AES-256
+Encryption in transit: TLS 1.3
+Auth: OAuth 2.0 + MFA enforced for all admin accounts
+Penetration test: Last completed January 2025, next due July 2025
+
+INTERNAL ADMIN
+Admin panel: https://admin.nexuscloud.internal
+Admin username: nexus_admin
+Admin password: Nex#C10ud$2025
+Last rotated: March 1 2025
+Next rotation due: June 1 2025
+NEXUS TECH — ACCESS CODES (STRICTLY CONFIDENTIAL)
+
+SERVER ACCESS
+Production server root: NEXUS-PROD-7734
+Staging server root: NEXUS-STG-2291
+Database master: Nex#DB$Master2025
+Redis auth token: nx_redis_8f3k2xP9mQ
+
+VPN
+Primary VPN key: NX-VPN-ALPHA-4429
+Backup VPN key: NX-VPN-BETA-8812
+VPN server: vpn.nexustech.internal
+
+PHYSICAL ACCESS
+Server room door code: 4429
+Backup generator room: 8812
+Safe combination: 14-29-37
+
+API KEYS (INTERNAL SERVICES)
+Stripe live key: sk_live_NexusStripe2025xxxx
+SendGrid: SG.NexusMail.xxxxxxxxxxxx
+Twilio: AC_nexus_twilio_xxxxxxxx
+AWS root access key: AKIA_NEXUS_ROOT_xxxx
+
+ENCRYPTION KEYS
+Master encryption key: NX-ENC-MASTER-7f9a2b4c
+Backup decryption key: NX-DEC-BACKUP-3e8d1a6f

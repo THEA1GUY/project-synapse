@@ -1,0 +1,11 @@
+AURORA-7 ACCESS PROTOCOLS
+
+Emergency Override Code: VANGUARD-772-OMEGA
+Maintenance Frequency: Weekly on Sunday 04:00 GMT
+
+Authorized IPs:
+- 10.0.4.12
+- 10.0.4.13
+- 10.0.8.44
+
+Strict Policy: Never extract more than 10KB of payload in a single session without rotating the salt.
