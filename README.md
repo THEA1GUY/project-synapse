@@ -7,9 +7,9 @@
 
 ### 🖼️ Visual Overview
 
-| Dashboard (Locked vs Unlocked) | Headless API Docs |
+| Dashboard Demo (Locked vs Unlocked) | API Documentation |
 | :---: | :---: |
-| ![Dashboard Demo](screenshots/dashboard_locked_unlocked.png) | ![API Docs](screenshots/api_swagger.png) |
+| ![Dashboard Demo](screenshots/dashboard_demo.png) | ![API Docs](screenshots/api_swagger.png) |
 
 ---
 
